@@ -1,10 +1,10 @@
-package main
+package iowrapper
 
 import (
+	"fmt"
 	"net"
 	"net/rpc"
 	"time"
-    "fmt"
 )
 
 type (
@@ -63,15 +63,5 @@ func Init() {
 	c, err = NewClient(dsn, time.Millisecond*500)
 	if err != nil {
 		fmt.Println(err)
-	}
-}
-
-
-func main(){
-    Init()
-    //c.Put(cacheItem)
-	item, _ := c.Get(cacheItem.Key)
-	if item != nil {
-		fmt.Printf("Cache key should not exist: %s\n", cacheItem.Key)
 	}
 }

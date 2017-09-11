@@ -1,4 +1,4 @@
-package main
+package iowrapper
 
 import (
 	"log"
@@ -14,7 +14,6 @@ func init() {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	rpc.Register(NewRPC())
-
 	l, e := net.Listen("tcp", ":9876")
 	if e != nil {
 		log.Fatal("listen error:", e)
