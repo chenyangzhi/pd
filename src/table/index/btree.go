@@ -819,3 +819,6 @@ type Int int
 func (a Int) Less(b Item) bool {
 	return a < b.(Int)
 }
+func (a BtreeNodeItem) Less(b Item) bool{
+	return a < (b.(BtreeNodeItem)).Key
+}
