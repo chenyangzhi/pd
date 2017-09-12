@@ -238,8 +238,10 @@ func (s *children) truncate(index int) {
 //   * len(children) == 0, len(items) unconstrained
 //   * len(children) == len(items) + 1
 type node struct {
+	nodeId   int32
 	items    items
 	children children
+	childrenId []int32
 	cow      *copyOnWriteContext
 }
 
@@ -383,11 +385,13 @@ func (n *node) remove(item Item, minItems int, typ toRemove) Item {
 	switch typ {
 	case removeMax:
 		if len(n.children) == 0 {
+			DirtyPage.Insert(n.nodeId)
 			return n.items.pop()
 		}
 		i = len(n.items)
 	case removeMin:
 		if len(n.children) == 0 {
+			DirtyPage.Insert(n.nodeId)
 			return n.items.removeAt(0)
 		}
 		i = 0
@@ -395,6 +399,7 @@ func (n *node) remove(item Item, minItems int, typ toRemove) Item {
 		i, found = n.items.find(item)
 		if len(n.children) == 0 {
 			if found {
+				DirtyPage.Insert(n.nodeId)
 				return n.items.removeAt(i)
 			}
 			return nil
@@ -414,6 +419,7 @@ func (n *node) remove(item Item, minItems int, typ toRemove) Item {
 		// The item exists at index 'i', and the child we've selected can give us a
 		// predecessor, since if we've gotten here it's got > minItems items in it.
 		out := n.items[i]
+		DirtyPage.Insert(n.nodeId)
 		// We use our special-case 'remove' call with typ=maxItem to pull the
 		// predecessor of item i (the rightmost leaf of our immediate left child)
 		// and set it into where we pulled the item from.
@@ -664,7 +670,9 @@ func (t *BTree) ReplaceOrInsert(item Item) Item {
 		if len(t.root.items) >= t.maxItems() {
 			item2, second := t.root.split(t.maxItems() / 2)
 			oldroot := t.root
+			DirtyPage.Insert(oldroot.nodeId)
 			t.root = t.cow.newNode()
+			MtPage.RootId = t.root.nodeId
 			t.root.items = append(t.root.items, item2)
 			t.root.children = append(t.root.children, oldroot, second)
 		}
@@ -702,7 +710,9 @@ func (t *BTree) deleteItem(item Item, typ toRemove) Item {
 	out := t.root.remove(item, t.minItems(), typ)
 	if len(t.root.items) == 0 && len(t.root.children) > 0 {
 		oldroot := t.root
+		DirtyPage.Insert(oldroot.nodeId)
 		t.root = t.root.children[0]
+		MtPage.RootId = t.root.nodeId
 		t.cow.freeNode(oldroot)
 	}
 	if out != nil {
@@ -814,11 +824,10 @@ func (t *BTree) Len() int {
 
 // Int implements the Item interface for integers.
 type Int int
-
 // Less returns true if int(a) < int(b).
 func (a Int) Less(b Item) bool {
 	return a < b.(Int)
 }
 func (a BtreeNodeItem) Less(b Item) bool{
-	return a < (b.(BtreeNodeItem)).Key
+	return a.Key < (b.(BtreeNodeItem)).Key
 }

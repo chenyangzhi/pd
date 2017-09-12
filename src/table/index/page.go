@@ -4,12 +4,25 @@ import (
 	"common"
 	"encoding/binary"
 	"log"
+	"container/list"
 )
 
 const (
 	BTNPGHEADERLENGHT = common.INT16_LEN + common.INT64_LEN +
 		common.INT64_LEN + common.INT32_LEN
+	PAGESIZE = 4096
 )
+
+var EmptyPage = list.New()
+type MMap []byte
+var MMaplist = list.New()
+var MtPage MetaPage
+var DirtyPage = make(common.Set)
+type MetaPage struct {
+	RootId int32
+	EmptyPageCount int32
+	EmptyPage []int32
+}
 
 type BtreeNodePageHeaderData struct {
 	PageSize    int32
@@ -28,6 +41,7 @@ func NewBtreeNodeItem(key string,idxId int64, keyType byte){
 type BtreeNodePage struct {
 	PageHeader  *BtreeNodePageHeaderData
 	Items       *[]BtreeNodeItem
+	Children    []int64
 	ItemsLength int32
 }
 
@@ -58,7 +72,7 @@ func (item BtreeNodePageHeaderData) ToBytes(bytes *[]byte) {
 	iEnd = iStart + common.INT64_LEN
 	binary.LittleEndian.PutUint64(bs, uint64(item.BtreeNodeId))
 	copy((*bytes)[iStart:iEnd], bs)
-	crc := common.Crc16((*bs)[0:iEnd])
+	crc := common.Crc16(bs)
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
 	binary.LittleEndian.PutUint16(bs, crc)
@@ -83,7 +97,7 @@ func (item BtreeNodeItem) ToBytes(bytes *[]byte) {
 	iStart = iEnd
 	iEnd = iStart + common.BYTE_LEN
 	(*bytes)[iStart] = item.KeyType
-	crc := common.Crc16((*bs)[0:iEnd])
+	crc := common.Crc16(bs)
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
 	binary.LittleEndian.PutUint16(bs, crc)
@@ -113,7 +127,7 @@ func BytesToBtreeNodeItems(barr *[]byte, count int16) []BtreeNodeItem {
 		if crc_0 != crc_1 {
 			log.Fatalf("the crc is failed")
 		}
-		sentiel = iEnd
+		sentiel = int(iEnd)
 	}
 	return items
 }
@@ -154,3 +168,10 @@ func BatchBtreeNodeItemToBytes(items *[]BtreeNodeItem, size int32) []byte {
 	}
 	return bytes
 }
+
+//func BtreeNodePageToBytes(btreeNodePage BtreeNodePage)[]byte{
+//	PageHeader  *BtreeNodePageHeaderData
+//	Items       *[]BtreeNodeItem
+//	Children    []int64
+//	ItemsLength int32
+//}

@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
-	"sort"
 	"sync"
 	"table/index"
 	"time"
 )
 
 var (
-	size   = flag.Int("size", 500, "size of the tree to build")
+	size   = flag.Int("size", 50000, "size of the tree to build")
 	degree = flag.Int("degree", 75, "degree of btree")
 )
 
