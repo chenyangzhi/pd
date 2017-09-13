@@ -5,23 +5,38 @@ import (
 	"encoding/binary"
 	"log"
 	"container/list"
+	"github.com/edsrzf/mmap-go"
+	"os"
+	"path"
 )
 
 const (
 	BTNPGHEADERLENGHT = common.INT16_LEN + common.INT64_LEN +
 		common.INT64_LEN + common.INT32_LEN
 	PAGESIZE = 4096
+	MMAPSIZE = 1000
+	METAPAGEMAXLENGTH = 16*4096
+	DEGREE = 110
 )
 
 var EmptyPage = list.New()
-type MMap []byte
-var MMaplist = list.New()
-var MtPage MetaPage
+var MMapmap= make(map[int64]mmap.MMap)
+var MtPage = NewMetaPage(0,0)
 var DirtyPage = make(common.Set)
+var TablePath map[string]TablePath
+var TableFileIo map[string]os.File
 type MetaPage struct {
-	RootId int32
-	EmptyPageCount int32
-	EmptyPage []int32
+	RootId int64
+	EmptyPageCount int64
+	EmptyPage []byte
+	BTreePageCount int64
+}
+func NewMetaPage(rootId int32,emptyCount int32)*MetaPage{
+	return &MetaPage{
+		RootId:rootId,
+		EmptyPageCount:emptyCount,
+		EmptyPage:make([]int32,0,emptyCount),
+	}
 }
 
 type BtreeNodePageHeaderData struct {
@@ -175,3 +190,75 @@ func BatchBtreeNodeItemToBytes(items *[]BtreeNodeItem, size int32) []byte {
 //	Children    []int64
 //	ItemsLength int32
 //}
+type TablePath struct {
+	basePath string
+	table string
+	dataBase string
+	columnName string
+}
+func CreateFileDs(basePath, table, database, columnName string){
+	for key,value := range TablePath{
+		filePath := path.Join(value.basePath, value.dataBase, value.table, value.columnName)
+		f, err := os.OpenFile(filePath, os.O_RDWR, 0666)
+		common.Check(err)
+		key = key + "." + columnName
+		TableFileIo[key] = f
+	}
+}
+func MMapPage(columnName string)*mmap.MMap{   // columnName join database, table and columnName with .
+        f := TableFileIo[columnName]
+	mmp, err := mmap.MapRegion(f, PAGESIZE, mmap.RDWR, 0, 0)
+	common.Check(err)
+	return &mmp
+}
+
+func GetMMapRegion(nodeId int64, f os.File)(int64,*mmap.MMap){
+	numberMmap := nodeId/MMAPSIZE + 1
+	off := numberMmap * 1000 * 4096
+	mmp, err := mmap.MapRegion(f, PAGESIZE, mmap.RDWR, 0, off)
+	common.Check(err)
+	return numberMmap,&mmp
+}
+
+func (metaPage MetaPage) ToBytes(){
+}
+
+
+func BytesToMetaPage(barr *[]byte)*MetaPage  {
+	iStart, iEnd := 0, 0
+	item := new(MetaPage)
+	iEnd = iStart + common.INT64_LEN
+	item.RootId = int64(binary.LittleEndian.Uint64((*barr)[iStart:iEnd]))
+	iStart = iEnd
+	iEnd = iStart + common.INT64_LEN
+	item.EmptyPageCount = int64(binary.LittleEndian.Uint64((*barr)[iStart:iEnd]))
+	iStart = iEnd
+	iEnd = iStart + common.INT64_LEN
+	item.BTreePageCount = int64(binary.LittleEndian.Uint64((*barr)[iStart:iEnd]))
+	item.EmptyPage = make([]byte,0, item.EmptyPageCount + item.BTreePageCount)
+	copy(item.EmptyPage,(*barr)[iStart:iEnd])
+	crc_0 := common.Crc16((*barr)[0:iEnd])
+	iStart = iEnd
+	iEnd = iStart + common.INT16_LEN
+	crc_1 := binary.LittleEndian.Uint16((*barr)[iStart:iEnd])
+	if crc_0 != crc_1 {
+		log.Fatalf("the crc is failed")
+	}
+	return item
+}
+
+func GETMetaPage(columnName string)*MetaPage {
+	f := TableFileIo[columnName]
+	mmp, err := mmap.MapRegion(f, 0, mmap.RDWR, 0, METAPAGEMAXLENGTH)
+	common.Check(err)
+	return BytesToMetaPage(mmp)
+}
+
+func BuildBTreeFromPage(baseTable string)*BTree{
+	tr := New(DEGREE)
+	metaPage := GETMetaPage(baseTable)
+	rootId := metaPage.RootId
+	baseTableFileIo := TableFileIo[baseTable]
+	GetMMapRegion(rootId,baseTableFileIo)
+	return tr
+}
