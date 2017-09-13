@@ -1,50 +1,3 @@
-// Copyright 2014 Google Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// Package btree implements in-memory B-Trees of arbitrary degree.
-//
-// btree implements an in-memory B-Tree for use as an ordered data structure.
-// It is not meant for persistent storage solutions.
-//
-// It has a flatter structure than an equivalent red-black or other binary tree,
-// which in some cases yields better memory usage and/or performance.
-// See some discussion on the matter here:
-//   http://google-opensource.blogspot.com/2013/01/c-containers-that-save-memory-and-time.html
-// Note, though, that this project is in no way related to the C++ B-Tree
-// implementation written about there.
-//
-// Within this tree, each node contains a slice of items and a (possibly nil)
-// slice of children.  For basic numeric values or raw structs, this can cause
-// efficiency differences when compared to equivalent C++ template code that
-// stores values in arrays within the node:
-//   * Due to the overhead of storing values as interfaces (each
-//     value needs to be stored as the value itself, then 2 words for the
-//     interface pointing to that value and its type), resulting in higher
-//     memory use.
-//   * Since interfaces can point to values anywhere in memory, values are
-//     most likely not stored in contiguous blocks, resulting in a higher
-//     number of cache misses.
-// These issues don't tend to matter, though, when working with strings or other
-// heap-allocated structures, since C++-equivalent structures also must store
-// pointers and also distribute their values across the heap.
-//
-// This implementation is designed to be a drop-in replacement to gollrb.LLRB
-// trees, (http://github.com/petar/gollrb), an excellent and probably the most
-// widely used ordered tree implementation in the Go ecosystem currently.
-// Its functions, therefore, exactly mirror those of
-// llrb.LLRB where possible.  Unlike gollrb, though, we currently don't
-// support storing multiple equivalent values.
 package index
 
 import (
@@ -52,16 +5,9 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"sync"
+	"os"
 )
-
-// Item represents a single object in the tree.
 type Item interface {
-	// Less tests whether the current item is less than the given argument.
-	//
-	// This must provide a strict weak ordering.
-	// If !a.Less(b) && !b.Less(a), we treat this to mean a == b (i.e. we can only
-	// hold one of either a or b in the tree).
 	Less(than Item) bool
 }
 
@@ -74,41 +20,29 @@ var (
 	nilChildren = make(children, 16)
 )
 
-// FreeList represents a free list of btree nodes. By default each
-// BTree has its own FreeList, but multiple BTrees can share the same
-// FreeList.
-// Two Btrees using the same freelist are safe for concurrent write access.
 type FreeList struct {
-	mu       sync.Mutex
 	freelist []*node
 }
 
-// NewFreeList creates a new free list.
-// size is the maximum size of the returned free list.
 func NewFreeList(size int) *FreeList {
 	return &FreeList{freelist: make([]*node, 0, size)}
 }
 
 func (f *FreeList) newNode() (n *node) {
-	f.mu.Lock()
 	index := len(f.freelist) - 1
 	if index < 0 {
-		f.mu.Unlock()
 		return new(node)
 	}
 	n = f.freelist[index]
 	f.freelist[index] = nil
 	f.freelist = f.freelist[:index]
-	f.mu.Unlock()
 	return
 }
 
 func (f *FreeList) freeNode(n *node) {
-	f.mu.Lock()
 	if len(f.freelist) < cap(f.freelist) {
 		f.freelist = append(f.freelist, n)
 	}
-	f.mu.Unlock()
 }
 
 // ItemIterator allows callers of Ascend* to iterate in-order over portions of
@@ -191,7 +125,11 @@ func (s items) find(item Item) (index int, found bool) {
 }
 
 // children stores child nodes in a node.
-type children []*node
+type childrenNode struct {
+	childNode *node
+	childNodeId int32
+}
+type children []*childrenNode
 
 // insertAt inserts a value into the given index, pushing all subsequent values
 // forward.
@@ -241,12 +179,14 @@ type node struct {
 	nodeId   int32
 	items    items
 	children children
-	childrenId []int32
 	cow      *copyOnWriteContext
 }
 
-func (n *node) mutableChild(i int) *node {
-	return n.children[i]
+func (n *node) getReadableChild(i int) *node {
+	if n.children[i].childNode == nil {
+		return n.cow.tree.GetBTreeNodeById(n.children[i].childNodeId)
+	}
+	return n.children[i].childNode
 }
 
 // split splits the given node at the given index.  The current node shrinks,
@@ -267,10 +207,10 @@ func (n *node) split(i int) (Item, *node) {
 // maybeSplitChild checks if a child should be split, and if so splits it.
 // Returns whether or not a split occurred.
 func (n *node) maybeSplitChild(i, maxItems int) bool {
-	if len(n.children[i].items) < maxItems {
+	if len(n.children[i].childNode.items) < maxItems {
 		return false
 	}
-	first := n.mutableChild(i)
+	first := n.getReadableChild(i)
 	item, second := first.split(maxItems / 2)
 	n.items.insertAt(i, item)
 	n.children.insertAt(i+1, second)
@@ -308,7 +248,7 @@ func (n *node) insert(item Item, maxItems int) Item {
 			return out
 		}
 	}
-	return n.mutableChild(i).insert(item, maxItems)
+	return n.getReadableChild(i).insert(item, maxItems)
 }
 
 // get finds the given key in the subtree and returns it.
@@ -317,7 +257,7 @@ func (n *node) get(key Item) Item {
 	if found {
 		return n.items[i]
 	} else if len(n.children) > 0 {
-		return n.children[i].get(key)
+		return n.children[i].childNode.get(key)
 	}
 	return nil
 }
@@ -389,10 +329,10 @@ func (n *node) remove(item Item, minItems int, typ toRemove) Item {
 		panic("invalid type")
 	}
 	// If we get to here, we have children.
-	if len(n.children[i].items) <= minItems {
+	if len(n.getReadableChild(i).items) <= minItems {
 		return n.growChildAndRemove(i, item, minItems, typ)
 	}
-	child := n.mutableChild(i)
+	child := n.getReadableChild(i)
 	// Either we had enough items to begin with, or we've done some
 	// merging/stealing, because we've got enough now and we're ready to return
 	// stuff.
@@ -432,10 +372,10 @@ func (n *node) remove(item Item, minItems int, typ toRemove) Item {
 // whether we're in case 1 or 2), we'll have enough items and can guarantee
 // that we hit case A.
 func (n *node) growChildAndRemove(i int, item Item, minItems int, typ toRemove) Item {
-	if i > 0 && len(n.children[i-1].items) > minItems {
+	if i > 0 && len(n.getReadableChild(i).items) > minItems {
 		// Steal from left child
-		child := n.mutableChild(i)
-		stealFrom := n.mutableChild(i - 1)
+		child := n.getReadableChild(i)
+		stealFrom := n.getReadableChild(i-1)
 		stolenItem := stealFrom.items.pop()
 		child.items.insertAt(0, n.items[i-1])
 		n.items[i-1] = stolenItem
@@ -445,10 +385,10 @@ func (n *node) growChildAndRemove(i int, item Item, minItems int, typ toRemove) 
 		DirtyPage.Insert(n.nodeId)
 		DirtyPage.Insert(child.nodeId)
 		DirtyPage.Insert(stealFrom.nodeId)
-	} else if i < len(n.items) && len(n.children[i+1].items) > minItems {
+	} else if i < len(n.items) && len(n.getReadableChild(i+1).items) > minItems {
 		// steal from right child
-		child := n.mutableChild(i)
-		stealFrom := n.mutableChild(i + 1)
+		child := n.getReadableChild(i)
+		stealFrom := n.getReadableChild(i+1)
 		stolenItem := stealFrom.items.removeAt(0)
 		child.items = append(child.items, n.items[i])
 		n.items[i] = stolenItem
@@ -462,7 +402,7 @@ func (n *node) growChildAndRemove(i int, item Item, minItems int, typ toRemove) 
 		if i >= len(n.items) {
 			i--
 		}
-		child := n.mutableChild(i)
+		child := n.getReadableChild(i)
 		// merge with right child
 		mergeItem := n.items.removeAt(i)
 		mergeChild := n.children.removeAt(i + 1)
@@ -499,7 +439,7 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 				continue
 			}
 			if len(n.children) > 0 {
-				if hit, ok = n.children[i].iterate(dir, start, stop, includeStart, hit, iter); !ok {
+				if hit, ok = n.getReadableChild(i).iterate(dir, start, stop, includeStart, hit, iter); !ok {
 					return hit, false
 				}
 			}
@@ -516,7 +456,7 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 			}
 		}
 		if len(n.children) > 0 {
-			if hit, ok = n.children[len(n.children)-1].iterate(dir, start, stop, includeStart, hit, iter); !ok {
+			if hit, ok = n.getReadableChild(len(n.children)-1).iterate(dir, start, stop, includeStart, hit, iter); !ok {
 				return hit, false
 			}
 		}
@@ -528,7 +468,7 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 				}
 			}
 			if len(n.children) > 0 {
-				if hit, ok = n.children[i+1].iterate(dir, start, stop, includeStart, hit, iter); !ok {
+				if hit, ok = n.getReadableChild(i+1).iterate(dir, start, stop, includeStart, hit, iter); !ok {
 					return hit, false
 				}
 			}
@@ -541,7 +481,7 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 			}
 		}
 		if len(n.children) > 0 {
-			if hit, ok = n.children[0].iterate(dir, start, stop, includeStart, hit, iter); !ok {
+			if hit, ok = n.getReadableChild(0).iterate(dir, start, stop, includeStart, hit, iter); !ok {
 				return hit, false
 			}
 		}
@@ -553,7 +493,7 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 func (n *node) print(w io.Writer, level int) {
 	fmt.Fprintf(w, "%sNODE:%v\n", strings.Repeat("  ", level), n.items)
 	for _, c := range n.children {
-		c.print(w, level+1)
+		c.childNode.print(w, level+1)
 	}
 }
 
@@ -569,6 +509,7 @@ type BTree struct {
 	length int
 	root   *node
 	cow    *copyOnWriteContext
+	f      os.File
 }
 
 // copyOnWriteContext pointers determine node ownership... a tree with a write
@@ -587,6 +528,7 @@ type BTree struct {
 // copy.
 type copyOnWriteContext struct {
 	freelist *FreeList
+	tree      *BTree
 }
 
 // Clone clones the btree, lazily.  Clone should not be called concurrently,
