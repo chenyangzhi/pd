@@ -17,7 +17,7 @@ var (
 )
 
 func rountine(vals *[]int) {
-	tr := index.New(*degree)
+	tr := index.New(*degree, "./dataBase")
 	for _, v := range *vals {
 		tr.ReplaceOrInsert(index.Int(v))
 	}

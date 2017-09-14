@@ -1,12 +1,15 @@
 package index
 
 import (
+	"common"
 	"fmt"
+	"github.com/edsrzf/mmap-go"
 	"io"
+	"os"
 	"sort"
 	"strings"
-	"os"
 )
+
 type Item interface {
 	Less(than Item) bool
 }
@@ -54,18 +57,27 @@ type ItemIterator func(i Item) bool
 //
 // New(2), for example, will create a 2-3-4 tree (each node contains 1-3 items
 // and 2-4 children).
-func New(degree int) *BTree {
-	return NewWithFreeList(degree, NewFreeList(DefaultFreeListSize))
+func New(degree int, path string) *BTree {
+	return NewWithFreeList(degree, NewFreeList(DefaultFreeListSize), path)
 }
 
 // NewWithFreeList creates a new B-Tree that uses the given node free list.
-func NewWithFreeList(degree int, f *FreeList) *BTree {
+func NewWithFreeList(degree int, f *FreeList, path string) *BTree {
 	if degree <= 1 {
 		panic("bad degree")
 	}
+	cow := copyOnWriteContext{freelist: f}
+	fs, err := os.OpenFile(path, os.O_RDWR, 0666)
+	cow.f = fs
+	common.Check(err)
+	cow.emptyList = make([]int32, 0, 32)
+	cow.mmapmap = make(map[int32]*mmap.MMap)
+	cow.dirtyPage = make(common.Set)
+	cow.mtPage = GetMetaPage(fs)
+	cow.freelist = f
 	return &BTree{
 		degree: degree,
-		cow:    &copyOnWriteContext{freelist: f},
+		cow:    &cow,
 	}
 }
 
@@ -126,7 +138,7 @@ func (s items) find(item Item) (index int, found bool) {
 
 // children stores child nodes in a node.
 type childrenNode struct {
-	childNode *node
+	childNode   *node
 	childNodeId int32
 }
 type children []*childrenNode
@@ -134,16 +146,20 @@ type children []*childrenNode
 // insertAt inserts a value into the given index, pushing all subsequent values
 // forward.
 func (s *children) insertAt(index int, n *node) {
+	cn := childrenNode{
+		childNode:   n,
+		childNodeId: n.nodeId,
+	}
 	*s = append(*s, nil)
 	if index < len(*s) {
 		copy((*s)[index+1:], (*s)[index:])
 	}
-	(*s)[index] = n
+	(*s)[index] = &cn
 }
 
 // removeAt removes a value at a given index, pulling all subsequent values
 // back.
-func (s *children) removeAt(index int) *node {
+func (s *children) removeAt(index int) *childrenNode {
 	n := (*s)[index]
 	copy((*s)[index:], (*s)[index+1:])
 	(*s)[len(*s)-1] = nil
@@ -154,7 +170,7 @@ func (s *children) removeAt(index int) *node {
 // pop removes and returns the last element in the list.
 func (s *children) pop() (out *node) {
 	index := len(*s) - 1
-	out = (*s)[index]
+	out = (*s)[index].childNode
 	(*s)[index] = nil
 	*s = (*s)[:index]
 	return
@@ -184,7 +200,7 @@ type node struct {
 
 func (n *node) getReadableChild(i int) *node {
 	if n.children[i].childNode == nil {
-		return n.cow.tree.GetBTreeNodeById(n.children[i].childNodeId)
+		return GetBTreeNodeById(n.children[i].childNodeId, n.cow)
 	}
 	return n.children[i].childNode
 }
@@ -214,8 +230,8 @@ func (n *node) maybeSplitChild(i, maxItems int) bool {
 	item, second := first.split(maxItems / 2)
 	n.items.insertAt(i, item)
 	n.children.insertAt(i+1, second)
-	DirtyPage.Insert(n.nodeId)
-	DirtyPage.Insert(first.nodeId)
+	n.cow.dirtyPage.Insert(n.nodeId)
+	n.cow.dirtyPage.Insert(first.nodeId)
 	return true
 }
 
@@ -231,7 +247,7 @@ func (n *node) insert(item Item, maxItems int) Item {
 	}
 	if len(n.children) == 0 {
 		n.items.insertAt(i, item)
-		DirtyPage.Insert(n.nodeId)
+		n.cow.dirtyPage.Insert(n.nodeId)
 		return nil
 	}
 	if n.maybeSplitChild(i, maxItems) {
@@ -242,7 +258,7 @@ func (n *node) insert(item Item, maxItems int) Item {
 		case inTree.Less(item):
 			i++ // we want second split node
 		default:
-			DirtyPage.Insert(n.nodeId)
+			n.cow.dirtyPage.Insert(n.nodeId)
 			out := n.items[i]
 			n.items[i] = item
 			return out
@@ -268,7 +284,7 @@ func min(n *node) Item {
 		return nil
 	}
 	for len(n.children) > 0 {
-		n = n.children[0]
+		n = n.children[0].childNode
 	}
 	if len(n.items) == 0 {
 		return nil
@@ -282,7 +298,7 @@ func max(n *node) Item {
 		return nil
 	}
 	for len(n.children) > 0 {
-		n = n.children[len(n.children)-1]
+		n = n.children[len(n.children)-1].childNode
 	}
 	if len(n.items) == 0 {
 		return nil
@@ -306,13 +322,13 @@ func (n *node) remove(item Item, minItems int, typ toRemove) Item {
 	switch typ {
 	case removeMax:
 		if len(n.children) == 0 {
-			DirtyPage.Insert(n.nodeId)
+			n.cow.dirtyPage.Insert(n.nodeId)
 			return n.items.pop()
 		}
 		i = len(n.items)
 	case removeMin:
 		if len(n.children) == 0 {
-			DirtyPage.Insert(n.nodeId)
+			n.cow.dirtyPage.Insert(n.nodeId)
 			return n.items.removeAt(0)
 		}
 		i = 0
@@ -320,7 +336,7 @@ func (n *node) remove(item Item, minItems int, typ toRemove) Item {
 		i, found = n.items.find(item)
 		if len(n.children) == 0 {
 			if found {
-				DirtyPage.Insert(n.nodeId)
+				n.cow.dirtyPage.Insert(n.nodeId)
 				return n.items.removeAt(i)
 			}
 			return nil
@@ -340,7 +356,7 @@ func (n *node) remove(item Item, minItems int, typ toRemove) Item {
 		// The item exists at index 'i', and the child we've selected can give us a
 		// predecessor, since if we've gotten here it's got > minItems items in it.
 		out := n.items[i]
-		DirtyPage.Insert(n.nodeId)
+		n.cow.dirtyPage.Insert(n.nodeId)
 		// We use our special-case 'remove' call with typ=maxItem to pull the
 		// predecessor of item i (the rightmost leaf of our immediate left child)
 		// and set it into where we pulled the item from.
@@ -375,29 +391,29 @@ func (n *node) growChildAndRemove(i int, item Item, minItems int, typ toRemove) 
 	if i > 0 && len(n.getReadableChild(i).items) > minItems {
 		// Steal from left child
 		child := n.getReadableChild(i)
-		stealFrom := n.getReadableChild(i-1)
+		stealFrom := n.getReadableChild(i - 1)
 		stolenItem := stealFrom.items.pop()
 		child.items.insertAt(0, n.items[i-1])
 		n.items[i-1] = stolenItem
 		if len(stealFrom.children) > 0 {
 			child.children.insertAt(0, stealFrom.children.pop())
 		}
-		DirtyPage.Insert(n.nodeId)
-		DirtyPage.Insert(child.nodeId)
-		DirtyPage.Insert(stealFrom.nodeId)
+		n.cow.dirtyPage.Insert(n.nodeId)
+		n.cow.dirtyPage.Insert(child.nodeId)
+		n.cow.dirtyPage.Insert(stealFrom.nodeId)
 	} else if i < len(n.items) && len(n.getReadableChild(i+1).items) > minItems {
 		// steal from right child
 		child := n.getReadableChild(i)
-		stealFrom := n.getReadableChild(i+1)
+		stealFrom := n.getReadableChild(i + 1)
 		stolenItem := stealFrom.items.removeAt(0)
 		child.items = append(child.items, n.items[i])
 		n.items[i] = stolenItem
 		if len(stealFrom.children) > 0 {
 			child.children = append(child.children, stealFrom.children.removeAt(0))
 		}
-		DirtyPage.Insert(n.nodeId)
-		DirtyPage.Insert(child.nodeId)
-		DirtyPage.Insert(stealFrom.nodeId)
+		n.cow.dirtyPage.Insert(n.nodeId)
+		n.cow.dirtyPage.Insert(child.nodeId)
+		n.cow.dirtyPage.Insert(stealFrom.nodeId)
 	} else {
 		if i >= len(n.items) {
 			i--
@@ -407,11 +423,11 @@ func (n *node) growChildAndRemove(i int, item Item, minItems int, typ toRemove) 
 		mergeItem := n.items.removeAt(i)
 		mergeChild := n.children.removeAt(i + 1)
 		child.items = append(child.items, mergeItem)
-		child.items = append(child.items, mergeChild.items...)
-		child.children = append(child.children, mergeChild.children...)
-		DirtyPage.Insert(n.nodeId)
-		DirtyPage.Insert(child.nodeId)
-		n.cow.freeNode(mergeChild)
+		child.items = append(child.items, mergeChild.childNode.items...)
+		child.children = append(child.children, mergeChild.childNode.children...)
+		n.cow.dirtyPage.Insert(n.nodeId)
+		n.cow.dirtyPage.Insert(child.nodeId)
+		n.cow.freeNode(mergeChild.childNode)
 	}
 	return n.remove(item, minItems, typ)
 }
@@ -509,7 +525,6 @@ type BTree struct {
 	length int
 	root   *node
 	cow    *copyOnWriteContext
-	f      os.File
 }
 
 // copyOnWriteContext pointers determine node ownership... a tree with a write
@@ -527,8 +542,12 @@ type BTree struct {
 // not share context, but before we descend into them, we'll make a mutable
 // copy.
 type copyOnWriteContext struct {
-	freelist *FreeList
-	tree      *BTree
+	freelist  *FreeList
+	f         *os.File
+	emptyList []int32
+	mmapmap   map[int32]*mmap.MMap
+	mtPage    *MetaPage
+	dirtyPage common.Set
 }
 
 // Clone clones the btree, lazily.  Clone should not be called concurrently,
@@ -569,14 +588,15 @@ func (t *BTree) minItems() int {
 func (c *copyOnWriteContext) newNode() (n *node) {
 	n = c.freelist.newNode()
 	n.cow = c
-	n.nodeId = EmptyPage.Front().Value
+	n.nodeId = c.emptyList[len(c.emptyList)-1]
+	c.emptyList = c.emptyList[:(len(c.emptyList) - 1)]
 	return
 }
 
 func (c *copyOnWriteContext) freeNode(n *node) {
 	if n.cow == c {
 		// clear to allow GC
-		EmptyPage.PushBack(n.nodeId)
+		c.emptyList = append(c.emptyList, n.nodeId)
 		n.items.truncate(0)
 		n.children.truncate(0)
 		n.cow = nil
@@ -602,11 +622,13 @@ func (t *BTree) ReplaceOrInsert(item Item) Item {
 		if len(t.root.items) >= t.maxItems() {
 			item2, second := t.root.split(t.maxItems() / 2)
 			oldroot := t.root
-			DirtyPage.Insert(oldroot.nodeId)
+			t.cow.dirtyPage.Insert(oldroot.nodeId)
 			t.root = t.cow.newNode()
-			MtPage.RootId = t.root.nodeId
+			t.cow.mtPage.RootId = t.root.nodeId
 			t.root.items = append(t.root.items, item2)
-			t.root.children = append(t.root.children, oldroot, second)
+			old := &childrenNode{childNode: oldroot, childNodeId: oldroot.nodeId}
+			sec := &childrenNode{childNode: second, childNodeId: second.nodeId}
+			t.root.children = append(t.root.children, old, sec)
 		}
 	}
 	out := t.root.insert(item, t.maxItems())
@@ -641,9 +663,9 @@ func (t *BTree) deleteItem(item Item, typ toRemove) Item {
 	out := t.root.remove(item, t.minItems(), typ)
 	if len(t.root.items) == 0 && len(t.root.children) > 0 {
 		oldroot := t.root
-		DirtyPage.Insert(oldroot.nodeId)
-		t.root = t.root.children[0]
-		MtPage.RootId = t.root.nodeId
+		t.cow.dirtyPage.Insert(oldroot.nodeId)
+		t.root = t.root.children[0].childNode
+		t.cow.mtPage.RootId = t.root.nodeId
 		t.cow.freeNode(oldroot)
 	}
 	if out != nil {
@@ -755,10 +777,11 @@ func (t *BTree) Len() int {
 
 // Int implements the Item interface for integers.
 type Int int
+
 // Less returns true if int(a) < int(b).
 func (a Int) Less(b Item) bool {
 	return a < b.(Int)
 }
-func (a BtreeNodeItem) Less(b Item) bool{
+func (a BtreeNodeItem) Less(b Item) bool {
 	return a.Key < (b.(BtreeNodeItem)).Key
 }
