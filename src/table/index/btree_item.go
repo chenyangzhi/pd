@@ -75,7 +75,7 @@ func BytesToBtreeNodeItems(barr []byte, count int16) *[]*BtreeNodeItem {
 	return &items
 }
 
-func BatchBtreeNodeItemToBytes(items *[]*BtreeNodeItem, size int32) []byte {
+func BatchBtreeNodeItemToBytes(items *[]*BtreeNodeItem, size int16) []byte {
 	bytes := make([]byte, size, size)
 	iStart, iEnd := int32(0), int32(0)
 	for _, item := range *items {

@@ -2,67 +2,47 @@ package index
 
 import (
 	"common"
-	"encoding/binary"
 	"github.com/edsrzf/mmap-go"
 	"os"
 )
 
 const (
-	BTNPGHEADERLENGHT = common.INT16_LEN + common.INT64_LEN +
-		common.INT64_LEN + common.INT32_LEN
 	PAGESIZE          = 4096
 	MMAPSIZE          = 1000
 	METAPAGEMAXLENGTH = 64 * 4096
-	MAXPAGENUMBER     = 400000000
+	MAXPAGENUMBER     = 2093056
 	DEGREE            = 110
 )
 
 type BtreeNodePage struct {
-	ItemsLength    int16
-	ChildrenLength int16
 	PageHeader     *BtreeNodePageHeaderData
 	Items          *[]*BtreeNodeItem
-	ChildrenId     []int32
+}
+
+func NewBreeNodePage(p *BtreeNodePageHeaderData,i *[]*BtreeNodeItem)*BtreeNodePage{
+	return &BtreeNodePage{
+		PageHeader: p,
+		Items: i,
+	}
 }
 
 func (btreeNodePage BtreeNodePage) ToBytes() []byte {
 	iStart, iEnd := int32(0), int32(0)
 	bs := make([]byte, 0, PAGESIZE)
-	iEnd = iStart + btreeNodePage.PageHeader.Size()
-	copy(bs[iStart:iEnd], *btreeNodePage.PageHeader.ToBytes())
-	iEnd = iStart + common.INT32_LEN
-	binary.LittleEndian.PutUint32(bs[iStart:iEnd], uint32(btreeNodePage.ItemsLength))
-	iStart = iEnd
-	iEnd = iEnd + common.INT32_LEN
-	binary.LittleEndian.PutUint32(bs[iStart:iEnd], uint32(btreeNodePage.ChildrenLength))
-	for child := range btreeNodePage.ChildrenId {
-		iStart = iEnd
-		iEnd = iEnd + common.INT32_LEN
-		binary.LittleEndian.PutUint32(bs[iStart:iEnd], uint32(child))
-	}
-	arr := BatchBtreeNodeItemToBytes(btreeNodePage.Items, int32(len(*btreeNodePage.Items)))
-	copy(bs[iStart:iStart+int32(len(arr))], arr)
+	bp := btreeNodePage.PageHeader.ToBytes()
+	iEnd = iStart + int32(len(*bp))
+	copy(bs[iStart:iEnd], *bs)
+	arr := BatchBtreeNodeItemToBytes(btreeNodePage.Items, btreeNodePage.PageHeader.ItemsLength)
+	iStart = iEnd; iEnd = iStart + int32(len(arr))
+	copy(bs[iStart:iEnd], arr)
 	return bs
 }
 
 func BytesToBtreeNodePage(bs []byte) *BtreeNodePage {
 	btreeNode := &BtreeNodePage{}
-	iStart, iEnd := 0, 0
-	iEnd = iStart + common.INT16_LEN
-	btreeNode.ItemsLength = int16(binary.LittleEndian.Uint16(bs[iStart:iEnd]))
-	iStart = iEnd
-	iEnd = iStart + common.INT16_LEN
-	btreeNode.ChildrenLength = int16(binary.LittleEndian.Uint16(bs[iStart:iEnd]))
-	iStart = iEnd
-	iEnd = iStart + common.INT16_LEN
-	btreeNode.PageHeader = BytesToBtreeNodePageHeader(bs[iStart:iEnd])
-	btreeNode.Items = BytesToBtreeNodeItems(bs[iStart:iEnd], btreeNode.ItemsLength)
-	btreeNode.ChildrenId = make([]int32, btreeNode.ChildrenLength, btreeNode.ChildrenLength)
-	for i := int16(0); i < btreeNode.ChildrenLength; i++ {
-		iStart = iEnd
-		iEnd = iStart + common.INT32_LEN
-		btreeNode.ChildrenId[i] = int32(binary.LittleEndian.Uint32(bs[iStart:iEnd]))
-	}
+	iStart := 0
+	btreeNode.PageHeader,iStart = BytesToBtreeNodePageHeader(bs)
+	btreeNode.Items = BytesToBtreeNodeItems(bs[iStart:],btreeNode.PageHeader.ItemsLength)
 	return btreeNode
 }
 
@@ -81,7 +61,7 @@ func PageToNode(bnp *BtreeNodePage, cow *copyOnWriteContext) *node {
 	var n node
 	n.nodeId = bnp.PageHeader.BtreeNodeId
 	n.cow = cow
-	for _, id := range bnp.ChildrenId {
+	for _, id := range bnp.PageHeader.ChildrenId {
 		cNode := &childrenNode{
 			childNode:   nil,
 			childNodeId: id,
@@ -94,6 +74,24 @@ func PageToNode(bnp *BtreeNodePage, cow *copyOnWriteContext) *node {
 	}
 	return &n
 }
+
+func(n node)NodeToPage()*BtreeNodePage{
+	btreeNodeId := n.nodeId
+	itemLength := int16(len(n.items))
+	childLength := int16(len(n.children))
+	childrenId := make([]int32,0,childLength)
+	for i,id := range n.children{
+		childLength[i] = id.childNodeId
+	}
+	f := common.INT16_LEN * 3 + common.INT32_LEN * (3 + childLength)
+	ph := NewBtreeNodePageHeader(f,btreeNodeId,itemLength,childLength,childrenId)
+	bi := make([]*BtreeNodeItem,0,itemLength)
+	for i, item := range n.items{
+		bi[i] = &(item.(BtreeNodeItem))
+	}
+	return NewBreeNodePage(ph,bi)
+}
+
 
 func BuildBTreeFromPage(baseTableColumn string) *BTree {
 	tr := New(DEGREE, baseTableColumn)
