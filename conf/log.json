@@ -1,0 +1,21 @@
+{
+    "LogLevel" : "info",
+
+    "FileWriter" : {
+        "On": true,
+
+        "LogPath" : "./log/service.log.info",
+        "RotateLogPath" : "./log/service.log.info.%Y%M%D%H",
+
+        "WfLogPath" : "./log/service.log.wf",
+        "RotateWfLogPath" : "./log/service.log.wf.%Y%M%D%H",
+
+        "PublicLogPath" : "./log/public.log",
+        "RotatePublicLogPath" : "./log/public.log.%Y%M%D%H"
+    },
+
+    "ConsoleWriter" : {
+        "On" : true,
+        "Color" : true
+    }
+}
