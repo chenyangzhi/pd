@@ -8,7 +8,7 @@ import (
 
 type BtreeNodeItem struct {
 	Key     string
-	IdxId   int64
+	IdxId   uint64
 	KeyType byte
 }
 
@@ -47,19 +47,19 @@ func (item BtreeNodeItem) ToBytes(bytes *[]byte) {
 	copy((*bytes)[iStart:iEnd], bs)
 }
 
-func BytesToBtreeNodeItems(barr []byte, count int16) *[]*BtreeNodeItem {
+func BytesToBtreeNodeItems(barr []byte, count uint16) *[]*BtreeNodeItem {
 	items := make([]*BtreeNodeItem, count, count)
-	iStart, iEnd := int32(0), int32(0)
+	iStart, iEnd := uint32(0), uint32(0)
 	sentiel := 0
-	for i := int16(0); i < count; i++ {
+	for i := uint16(0); i < count; i++ {
 		iEnd = iStart + common.INT16_LEN
-		length := int32(binary.LittleEndian.Uint32(barr[iStart:iEnd]))
+		length := binary.LittleEndian.Uint32(barr[iStart:iEnd])
 		iStart = iEnd
 		iEnd = iStart + length
 		items[i].Key = string(barr[iStart:iEnd])
 		iStart = iEnd
 		iEnd = iStart + common.INT64_LEN
-		items[i].IdxId = int64(binary.LittleEndian.Uint64(barr[iStart:iEnd]))
+		items[i].IdxId = binary.LittleEndian.Uint64(barr[iStart:iEnd])
 		iStart = iEnd
 		iEnd = iStart + common.BYTE_LEN
 		items[i].KeyType = barr[iStart]
@@ -75,7 +75,7 @@ func BytesToBtreeNodeItems(barr []byte, count int16) *[]*BtreeNodeItem {
 	return &items
 }
 
-func BatchBtreeNodeItemToBytes(items *[]*BtreeNodeItem, size int16) []byte {
+func BatchBtreeNodeItemToBytes(items *[]*BtreeNodeItem, size uint16) []byte {
 	bytes := make([]byte, size, size)
 	iStart, iEnd := int32(0), int32(0)
 	for _, item := range *items {

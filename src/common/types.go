@@ -1,6 +1,7 @@
 package common
 
 import (
+	"strconv"
 	logger "until/xlog4go"
 )
 
@@ -15,13 +16,20 @@ const (
 type IndexType struct {
 }
 
-type Set map[int32]struct{}
+type Set map[uint32]struct{}
 
-func (set Set) Insert(i int32) {
+func (set Set) Insert(i uint32) {
 	set[i] = struct{}{}
+}
+func (set Set) String() string {
+	str := ""
+	for key := range set {
+		str = str + " " + strconv.Itoa(int(key))
+	}
+	return str
 }
 func Check(err error) {
 	if err != nil {
-		logger.Error("error is: %v",err)
+		logger.Error("error is: %v", err)
 	}
 }

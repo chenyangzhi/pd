@@ -70,10 +70,11 @@ func NewWithFreeList(degree int, f *FreeList, path string) *BTree {
 	fs, err := os.OpenFile(path, os.O_RDWR, 0666)
 	cow.f = fs
 	common.Check(err)
-	cow.emptyList = make([]int32, 0, 32)
-	cow.mmapmap = make(map[int32]*mmap.MMap)
+	cow.mmapmap = make(map[uint32]*mmap.MMap)
+	cow.nodeIdMap = make(map[uint32]*node)
 	cow.dirtyPage = make(common.Set)
 	cow.mtPage = GetMetaPage(fs)
+	cow.emptyList = cow.mtPage.GetEmptyList()
 	cow.freelist = f
 	return &BTree{
 		degree: degree,
@@ -139,7 +140,7 @@ func (s items) find(item Item) (index int, found bool) {
 // children stores child nodes in a node.
 type childrenNode struct {
 	childNode   *node
-	childNodeId int32
+	childNodeId uint32
 }
 type children []*childrenNode
 
@@ -192,7 +193,7 @@ func (s *children) truncate(index int) {
 //   * len(children) == 0, len(items) unconstrained
 //   * len(children) == len(items) + 1
 type node struct {
-	nodeId   int32
+	nodeId   uint32
 	items    items
 	children children
 	cow      *copyOnWriteContext
@@ -506,10 +507,10 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 }
 
 // Used for testing/debugging purposes.
-func (n *node) print(w io.Writer, level int) {
+func (n *node) Print(w io.Writer, level int) {
 	fmt.Fprintf(w, "%sNODE:%v\n", strings.Repeat("  ", level), n.items)
 	for _, c := range n.children {
-		c.childNode.print(w, level+1)
+		c.childNode.Print(w, level+1)
 	}
 }
 
@@ -544,8 +545,9 @@ type BTree struct {
 type copyOnWriteContext struct {
 	freelist  *FreeList
 	f         *os.File
-	emptyList []int32
-	mmapmap   map[int32]*mmap.MMap
+	emptyList []uint32
+	mmapmap   map[uint32]*mmap.MMap
+	nodeIdMap map[uint32]*node
 	mtPage    *MetaPage
 	dirtyPage common.Set
 }
@@ -588,8 +590,10 @@ func (t *BTree) minItems() int {
 func (c *copyOnWriteContext) newNode() (n *node) {
 	n = c.freelist.newNode()
 	n.cow = c
-	n.nodeId = c.emptyList[len(c.emptyList)-1]
-	c.emptyList = c.emptyList[:(len(c.emptyList) - 1)]
+	n.nodeId = c.emptyList[0]
+	_assert(len(c.emptyList) != 0, "the emptylist length is zero")
+	c.emptyList = c.emptyList[1:len(c.emptyList)]
+	c.nodeIdMap[n.nodeId] = n
 	return
 }
 
@@ -601,6 +605,7 @@ func (c *copyOnWriteContext) freeNode(n *node) {
 		n.children.truncate(0)
 		n.cow = nil
 		c.freelist.freeNode(n)
+		delete(c.nodeIdMap, n.nodeId)
 	}
 }
 
@@ -784,4 +789,12 @@ func (a Int) Less(b Item) bool {
 }
 func (a BtreeNodeItem) Less(b Item) bool {
 	return a.Key < (b.(BtreeNodeItem)).Key
+}
+
+func (tr BTree) GetDirtyPage() *common.Set {
+	return &tr.cow.dirtyPage
+}
+
+func (tr BTree) GetRootNode() *node {
+	return tr.root
 }

@@ -4,15 +4,23 @@ import (
 	"common"
 	"github.com/edsrzf/mmap-go"
 	"os"
+	//logger "until/xlog4go"
+	"fmt"
 )
 
 const (
 	PAGESIZE          = 4096
 	MMAPSIZE          = 1000
 	METAPAGEMAXLENGTH = 64 * 4096
-	MAXPAGENUMBER     = 2093056
+	MAXPAGENUMBER     = 64*4096*8 - 4096
 	DEGREE            = 110
 )
+
+func _assert(condition bool, msg string, v ...interface{}) {
+	if !condition {
+		panic(fmt.Sprintf("assertion failed: "+msg, v...))
+	}
+}
 
 type BtreeNodePage struct {
 	PageHeader *BtreeNodePageHeaderData
@@ -41,18 +49,18 @@ func (btreeNodePage BtreeNodePage) ToBytes() []byte {
 
 func BytesToBtreeNodePage(bs []byte) *BtreeNodePage {
 	btreeNode := &BtreeNodePage{}
-	iStart := int32(0)
+	iStart := uint32(0)
 	btreeNode.PageHeader, iStart = BytesToBtreeNodePageHeader(bs)
 	btreeNode.Items = BytesToBtreeNodeItems(bs[iStart:], btreeNode.PageHeader.ItemsLength)
 	return btreeNode
 }
 
-func GetMmapId(nodeId int32) int32 {
+func GetMmapId(nodeId uint32) uint32 {
 	return nodeId / MMAPSIZE
 }
 
-func GetMMapRegion(numberMmap int32, f *os.File) *mmap.MMap {
-	off := int64(numberMmap * MMAPSIZE * PAGESIZE)
+func GetMMapRegion(numberMmap uint32, f *os.File) *mmap.MMap {
+	off := int64(numberMmap*MMAPSIZE*PAGESIZE + METAPAGEMAXLENGTH)
 	mmp, err := mmap.MapRegion(f, PAGESIZE, mmap.RDWR, 0, off)
 	common.Check(err)
 	return &mmp
@@ -73,19 +81,20 @@ func PageToNode(bnp *BtreeNodePage, cow *copyOnWriteContext) *node {
 	for i, o := range *bnp.Items {
 		n.items[i] = o
 	}
+	cow.nodeIdMap[n.nodeId] = &n
 	return &n
 }
 
 func (n node) NodeToPage() *BtreeNodePage {
 	btreeNodeId := n.nodeId
-	itemLength := int16(len(n.items))
-	childLength := int16(len(n.children))
-	childrenId := make([]int32, 0, childLength)
+	itemLength := uint16(len(n.items))
+	childLength := uint16(len(n.children))
+	childrenId := make([]uint32, 0, childLength)
 	for i, id := range n.children {
 		childrenId[i] = id.childNodeId
 	}
 	f := common.INT16_LEN*3 + common.INT32_LEN*(3+childLength)
-	ph := NewBtreeNodePageHeader(int32(f), btreeNodeId, itemLength, childLength, childrenId)
+	ph := NewBtreeNodePageHeader(uint32(f), btreeNodeId, itemLength, childLength, childrenId)
 	bi := make([]*BtreeNodeItem, 0, itemLength)
 	for i, item := range n.items {
 		bi[i] = item.(*BtreeNodeItem)
@@ -99,12 +108,12 @@ func BuildBTreeFromPage(baseTableColumn string) *BTree {
 	mmapId := GetMmapId(rootId)
 	m := GetMMapRegion(mmapId, tr.cow.f)
 	tr.cow.mmapmap[mmapId] = m
-	p := BytesToBtreeNodePage((*m)[0:1])
+	p := BytesToBtreeNodePage((*m)[0:PAGESIZE])
 	tr.root = PageToNode(p, tr.cow)
 	return tr
 }
 
-func GetBTreeNodeById(id int32, cow *copyOnWriteContext) *node {
+func GetBTreeNodeById(id uint32, cow *copyOnWriteContext) *node {
 	mmapId := GetMmapId(id)
 	mmap := GetMMapRegion(mmapId, cow.f)
 	iStart := id % MMAPSIZE * PAGESIZE

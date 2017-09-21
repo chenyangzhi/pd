@@ -30,11 +30,11 @@ func (table Table) GetTablePath() string {
 
 func (table Table) CreateTable() {
 	path := table.GetTablePath()
-	os.MkdirAll(filepath.Base(path), os.ModePerm);
+	os.MkdirAll(filepath.Base(path), os.ModePerm)
 	common.Check(iowrapper.CreateSparseFile(path, 4096*10000))
 	f, err := os.OpenFile(path, os.O_RDWR, 0666)
 	common.Check(err)
-	metaPage := NewMetaPage(0, MAXPAGENUMBER)
+	metaPage := NewMetaPage(0, MAXPAGENUMBER/8)
 	bs := metaPage.ToBytes()
 	mapregion, err := mmap.MapRegion(f, METAPAGEMAXLENGTH, mmap.RDWR, 0, 0)
 	copy(mapregion, *bs)

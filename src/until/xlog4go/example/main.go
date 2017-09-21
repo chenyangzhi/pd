@@ -6,12 +6,12 @@ import (
 )
 
 func main() {
-	if err := logger.SetupLogWithConf("./log.json"); err != nil {
+	if err := logger.SetupLogWithConf("/home/chenyangzhi/workplace/source/pd/conf/log.json"); err != nil {
 		panic(err)
 	}
 	defer logger.Close()
 
-	var name = "shengkehua"
+	var name = "coco"
 	for {
 		logger.Trace("log4go by %s", name)
 		logger.Debug("log4go by %s", name)

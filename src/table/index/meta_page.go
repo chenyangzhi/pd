@@ -4,21 +4,21 @@ import (
 	"common"
 	"encoding/binary"
 	"github.com/edsrzf/mmap-go"
-	logger "until/xlog4go"
 	"os"
+	logger "until/xlog4go"
 )
 
 type MetaPage struct {
-	RootId         int32
-	EmptyPageCount int32
+	RootId         uint32
+	EmptyPageCount uint32
 	EmptyPage      []byte
 }
 
-func NewMetaPage(rootId int32, emptyCount int32) *MetaPage {
+func NewMetaPage(rootId uint32, emptyCount uint32) *MetaPage {
 	return &MetaPage{
 		RootId:         rootId,
 		EmptyPageCount: emptyCount,
-		EmptyPage:      make([]byte, 0, emptyCount),
+		EmptyPage:      make([]byte, emptyCount, emptyCount),
 	}
 }
 
@@ -38,7 +38,7 @@ func (metaPage MetaPage) ToBytes() *[]byte {
 	iStart = iEnd
 	iEnd = iStart + len(metaPage.EmptyPage)
 	copy(bs[iStart:iEnd], metaPage.EmptyPage)
-	crc := common.Crc16(bs)
+	crc := common.Crc16(bs[iStart:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
 	binary.LittleEndian.PutUint16(bs[iStart:iEnd], crc)
@@ -46,14 +46,16 @@ func (metaPage MetaPage) ToBytes() *[]byte {
 }
 
 func BytesToMetaPage(barr *[]byte) *MetaPage {
-	iStart, iEnd := 0, 0
+	iStart, iEnd, emptyPageLength := 0, 0, MAXPAGENUMBER/8
 	item := new(MetaPage)
 	iEnd = iStart + common.INT32_LEN
-	item.RootId = int32(binary.LittleEndian.Uint32((*barr)[iStart:iEnd]))
+	item.RootId = binary.LittleEndian.Uint32((*barr)[iStart:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT32_LEN
-	item.EmptyPageCount = int32(binary.LittleEndian.Uint32((*barr)[iStart:iEnd]))
-	item.EmptyPage = make([]byte, 0, MAXPAGENUMBER)
+	item.EmptyPageCount = binary.LittleEndian.Uint32((*barr)[iStart:iEnd])
+	item.EmptyPage = make([]byte, emptyPageLength, emptyPageLength)
+	iStart = iEnd
+	iEnd = iStart + emptyPageLength
 	copy(item.EmptyPage, (*barr)[iStart:iEnd])
 	crc_0 := common.Crc16((*barr)[0:iEnd])
 	iStart = iEnd
@@ -65,19 +67,23 @@ func BytesToMetaPage(barr *[]byte) *MetaPage {
 	return item
 }
 
-func (m MetaPage) GetEmptyList() *[]int32 {
-	e := make([]int32, 0, 32)
+func (m MetaPage) GetEmptyList() []uint32 {
+	e := make([]uint32, 0, 32)
 	for i, b := range m.EmptyPage {
-		if b == 0 {
-			e = append(e, int32(i))
+		for j := uint32(0); j < 8; j++ {
+			a := byte(1 << j)
+			if a&b == 0 {
+				e = append(e, uint32(i*8)+j)
+			}
 		}
+
 	}
-	return &e
+	return e
 }
 
 func GetMetaPage(f *os.File) *MetaPage {
-	mmp, err := mmap.MapRegion(f, METAPAGEMAXLENGTH, mmap.RDWR, 0, METAPAGEMAXLENGTH)
-	bs := make([]byte, 0, len(mmp))
+	mmp, err := mmap.MapRegion(f, METAPAGEMAXLENGTH, mmap.RDWR, 0, 0)
+	bs := make([]byte, len(mmp), len(mmp))
 	copy(bs, mmp)
 	common.Check(err)
 	return BytesToMetaPage(&bs)
