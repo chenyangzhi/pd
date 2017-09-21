@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"github.com/golang/snappy"
 	"hash"
 	"hash/crc32"
 	"io"
@@ -15,7 +16,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"github.com/golang/snappy"
 	logger "until/xlog4go"
 )
 

@@ -1,8 +1,8 @@
 package main
 
 import (
-	logger "until/xlog4go"
 	"time"
+	logger "until/xlog4go"
 )
 
 func main() {

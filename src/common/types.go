@@ -1,6 +1,8 @@
 package common
 
-import "log"
+import (
+	logger "until/xlog4go"
+)
 
 const (
 	INT64_LEN = 8
@@ -20,6 +22,6 @@ func (set Set) Insert(i int32) {
 }
 func Check(err error) {
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("error is: %v",err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/edsrzf/mmap-go"
 	"iowrapper"
 	"os"
+	"path/filepath"
 )
 
 type Table struct {
@@ -29,13 +30,14 @@ func (table Table) GetTablePath() string {
 
 func (table Table) CreateTable() {
 	path := table.GetTablePath()
+	os.MkdirAll(filepath.Base(path), os.ModePerm);
 	common.Check(iowrapper.CreateSparseFile(path, 4096*10000))
 	f, err := os.OpenFile(path, os.O_RDWR, 0666)
 	common.Check(err)
 	metaPage := NewMetaPage(0, MAXPAGENUMBER)
 	bs := metaPage.ToBytes()
 	mapregion, err := mmap.MapRegion(f, METAPAGEMAXLENGTH, mmap.RDWR, 0, 0)
-	copy(mapregion, bs)
+	copy(mapregion, *bs)
 	mapregion.Flush()
 	mapregion.Unmap()
 	f.Close()

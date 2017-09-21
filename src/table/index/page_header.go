@@ -21,7 +21,7 @@ type BtreeNodePageHeaderData struct {
 }
 
 func (pgHeader BtreeNodePageHeaderData) Size() int32 {
-	return common.INT32_LEN*3 + common.INT16_LEN*3 + len(pgHeader.ChildrenId)*common.INT32_LEN
+	return int32(common.INT32_LEN*3 + common.INT16_LEN*3 + len(pgHeader.ChildrenId)*common.INT32_LEN)
 }
 
 func NewBtreeNodePageHeader(f, n int32, i, c int16, ci []int32) *BtreeNodePageHeaderData {

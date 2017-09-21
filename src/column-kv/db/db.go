@@ -9,9 +9,9 @@ type Db struct {
 	Mem    *mem.Memtable
 }
 
-func NewDb() *Db{
-        return &Db{
-		Mem:mem.NewMemtable(),
+func NewDb() *Db {
+	return &Db{
+		Mem: mem.NewMemtable(),
 	}
 }
 func (db *Db) Insert(key int64, columns []*[]byte) bool {

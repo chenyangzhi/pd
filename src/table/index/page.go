@@ -31,7 +31,7 @@ func (btreeNodePage BtreeNodePage) ToBytes() []byte {
 	bs := make([]byte, 0, PAGESIZE)
 	bp := btreeNodePage.PageHeader.ToBytes()
 	iEnd = iStart + int32(len(*bp))
-	copy(bs[iStart:iEnd], *bs)
+	copy(bs[iStart:iEnd], bs)
 	arr := BatchBtreeNodeItemToBytes(btreeNodePage.Items, btreeNodePage.PageHeader.ItemsLength)
 	iStart = iEnd
 	iEnd = iStart + int32(len(arr))
@@ -41,7 +41,7 @@ func (btreeNodePage BtreeNodePage) ToBytes() []byte {
 
 func BytesToBtreeNodePage(bs []byte) *BtreeNodePage {
 	btreeNode := &BtreeNodePage{}
-	iStart := 0
+	iStart := int32(0)
 	btreeNode.PageHeader, iStart = BytesToBtreeNodePageHeader(bs)
 	btreeNode.Items = BytesToBtreeNodeItems(bs[iStart:], btreeNode.PageHeader.ItemsLength)
 	return btreeNode
@@ -82,15 +82,15 @@ func (n node) NodeToPage() *BtreeNodePage {
 	childLength := int16(len(n.children))
 	childrenId := make([]int32, 0, childLength)
 	for i, id := range n.children {
-		childLength[i] = id.childNodeId
+		childrenId[i] = id.childNodeId
 	}
 	f := common.INT16_LEN*3 + common.INT32_LEN*(3+childLength)
-	ph := NewBtreeNodePageHeader(f, btreeNodeId, itemLength, childLength, childrenId)
+	ph := NewBtreeNodePageHeader(int32(f), btreeNodeId, itemLength, childLength, childrenId)
 	bi := make([]*BtreeNodeItem, 0, itemLength)
 	for i, item := range n.items {
-		bi[i] = &(item.(BtreeNodeItem))
+		bi[i] = item.(*BtreeNodeItem)
 	}
-	return NewBreeNodePage(ph, bi)
+	return NewBreeNodePage(ph, &bi)
 }
 
 func BuildBTreeFromPage(baseTableColumn string) *BTree {

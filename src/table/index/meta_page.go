@@ -4,7 +4,7 @@ import (
 	"common"
 	"encoding/binary"
 	"github.com/edsrzf/mmap-go"
-	"log"
+	logger "until/xlog4go"
 	"os"
 )
 
@@ -60,7 +60,7 @@ func BytesToMetaPage(barr *[]byte) *MetaPage {
 	iEnd = iStart + common.INT16_LEN
 	crc_1 := binary.LittleEndian.Uint16((*barr)[iStart:iEnd])
 	if crc_0 != crc_1 {
-		log.Fatalf("the crc is failed")
+		logger.Error("the crc is failed")
 	}
 	return item
 }
@@ -76,7 +76,7 @@ func (m MetaPage) GetEmptyList() *[]int32 {
 }
 
 func GetMetaPage(f *os.File) *MetaPage {
-	mmp, err := mmap.MapRegion(f, 0, mmap.RDWR, 0, METAPAGEMAXLENGTH)
+	mmp, err := mmap.MapRegion(f, METAPAGEMAXLENGTH, mmap.RDWR, 0, METAPAGEMAXLENGTH)
 	bs := make([]byte, 0, len(mmp))
 	copy(bs, mmp)
 	common.Check(err)

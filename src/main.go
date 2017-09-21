@@ -3,27 +3,22 @@ package main
 
 import (
 	"flag"
-	//	"math/rand"
-	"sync"
-	//	"table/index"
+	"math/rand"
+	"table/index"
 )
 
 var (
 	size = flag.Int("size", 50000, "size of the tree to build")
 )
 
-//func rountine(vals *[]int) {
-//	tr := index.BuildBTreeFromPage("./dataBase")
-//	for _, v := range *vals {
-//		tr.ReplaceOrInsert(index.Int(v))
-//	}
-//	defer Wg.Done()
-//}
-
-var Wg sync.WaitGroup
 
 func main() {
 	flag.Parse()
-	//	vals := rand.Perm(*size)
-	//	rountine(vals)
+	table := index.NewTable("/home/coco/workplace/source/pd/data","test","test","primaryKey")
+	table.CreateTable()
+	vals := rand.Perm(*size)
+	tr := index.BuildBTreeFromPage(table.GetTablePath())
+	for _, v := range vals {
+		tr.ReplaceOrInsert(index.Int(v))
+	}
 }

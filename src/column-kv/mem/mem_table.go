@@ -12,9 +12,10 @@ type Memtable struct {
 	MnmutableTbale *list.List
 	Cur            int32
 }
-func NewMemtable()*Memtable{
+
+func NewMemtable() *Memtable {
 	return &Memtable{
-		MutableTable : make([][]*column.Recode,0,32),
+		MutableTable: make([][]*column.Recode, 0, 32),
 	}
 }
 
@@ -68,7 +69,7 @@ func (mem *Memtable) GetInsertValue(key int64) (val []*[]byte) {
 			i = int((i + end + 1) / 2)
 		} else {
 			end = i
-			i = int((start + i + 1)/ 2 )
+			i = int((start + i + 1) / 2)
 		}
 	}
 	return nil

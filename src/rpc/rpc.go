@@ -4,8 +4,8 @@ import (
 	"column-kv/db"
 	"errors"
 	//	"table/index"
-	"time"
 	"fmt"
+	"time"
 )
 
 type (
@@ -33,7 +33,7 @@ var (
 
 func NewRPC() *RPC {
 	return &RPC{
-		Db:db.NewDb(),
+		Db:       db.NewDb(),
 		Requests: &Requests{},
 	}
 }
