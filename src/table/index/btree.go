@@ -509,9 +509,14 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 
 // Used for testing/debugging purposes.
 func (n *node) Print(w io.Writer, level int) {
-	fmt.Fprintf(w, "%sNODE:%s %d %s %d %v\n", strings.Repeat("  ", level), "nodeid:", n.nodeId, "the item length : ", len(n.items), n.items)
-	for _, c := range n.children {
-		c.childNode.Print(w, level+1)
+	fmt.Fprintf(w, "%sNODE:%s %d %s %d ", strings.Repeat("  ", level), "nodeid:", n.nodeId, "the item length : ", len(n.items))
+	for _,o := range n.items{
+		fmt.Fprintf(w,"{%d}",o.(*BtreeNodeItem).IdxId)
+	}
+	fmt.Fprintf(w,"\n")
+	for i, _ := range n.children {
+		node := n.getReadableChild(i)
+		node.Print(w, level+1)
 	}
 }
 
