@@ -3,88 +3,92 @@ package index
 import (
 	"common"
 	"encoding/binary"
-	"log"
+	logger "until/xlog4go"
 )
 
 type BtreeNodeItem struct {
-	Key     string
+	Key     []byte
 	IdxId   uint64
 	KeyType byte
 }
 
-func NewBtreeNodeItem(key string, idxId int64, keyType byte) {
-
+func NewBtreeNodeItem(key []byte, idxId uint64, keyType byte)*BtreeNodeItem {
+        return &BtreeNodeItem{
+		Key:     key,
+		IdxId:   idxId,
+		KeyType: keyType,
+	}
 }
 
-func (item BtreeNodeItem) Size() int32 {
-	return int32(len(item.Key) + common.BYTE_LEN +
-		common.INT16_LEN + common.INT64_LEN +
-		common.INT64_LEN)
+func (item BtreeNodeItem) Size() uint16 {
+	return uint16(len(item.Key) + common.BYTE_LEN +
+		common.INT16_LEN + common.INT64_LEN)
 }
 
-func (item BtreeNodeItem) ToBytes(bytes *[]byte) {
-	length := item.Size()
-	bs := make([]byte, 8)
+func (item BtreeNodeItem) KeyLength() uint16{
+	return uint16(len(item.Key))
+}
+
+func (item BtreeNodeItem) ToBytes(bytes []byte) int32{
+	length := item.KeyLength()
+	_assert(len(bytes) >= int(item.Size()),"the BtreeNodeItem to bytes's bytes is too small")
 	iStart, iEnd := 0, 0
 	iEnd = iStart + common.INT16_LEN
-	binary.LittleEndian.PutUint32(bs, uint32(length))
-	copy((*bytes)[iStart:iEnd], bs)
+	binary.LittleEndian.PutUint16(bytes[iStart:iEnd], length)
 	keyLen := len(item.Key)
 	iStart = iEnd
 	iEnd = iStart + keyLen
-	copy((*bytes)[iStart:iEnd], []byte(item.Key))
+	copy(bytes[iStart:iEnd], item.Key)
 	iStart = iEnd
 	iEnd = iStart + common.INT64_LEN
-	binary.LittleEndian.PutUint64(bs, uint64(item.IdxId))
-	copy((*bytes)[iStart:iEnd], bs)
+	binary.LittleEndian.PutUint64(bytes[iStart:iEnd], uint64(item.IdxId))
 	iStart = iEnd
 	iEnd = iStart + common.BYTE_LEN
-	(*bytes)[iStart] = item.KeyType
-	crc := common.Crc16(bs)
+	bytes[iStart] = item.KeyType
+	crc := common.Crc16(bytes[0:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
-	binary.LittleEndian.PutUint16(bs, crc)
-	copy((*bytes)[iStart:iEnd], bs)
+	binary.LittleEndian.PutUint16(bytes[iStart:iEnd], crc)
+	return int32(iEnd)
 }
 
-func BytesToBtreeNodeItems(barr []byte, count uint16) *[]*BtreeNodeItem {
+func BytesToBtreeNodeItems(barr []byte, count uint16) []*BtreeNodeItem {
 	items := make([]*BtreeNodeItem, count, count)
 	iStart, iEnd := uint32(0), uint32(0)
 	sentiel := 0
 	for i := uint16(0); i < count; i++ {
-		iEnd = iStart + common.INT16_LEN
-		length := binary.LittleEndian.Uint32(barr[iStart:iEnd])
+		b := &BtreeNodeItem{}
 		iStart = iEnd
-		iEnd = iStart + length
-		items[i].Key = string(barr[iStart:iEnd])
+		iEnd = iStart + common.INT16_LEN
+		length := binary.LittleEndian.Uint16(barr[iStart:iEnd])
+		iStart = iEnd
+		iEnd = iStart + uint32(length)
+		b.Key = barr[iStart:iEnd]
 		iStart = iEnd
 		iEnd = iStart + common.INT64_LEN
-		items[i].IdxId = binary.LittleEndian.Uint64(barr[iStart:iEnd])
+		b.IdxId = binary.LittleEndian.Uint64(barr[iStart:iEnd])
 		iStart = iEnd
 		iEnd = iStart + common.BYTE_LEN
-		items[i].KeyType = barr[iStart]
+		b.KeyType = barr[iStart]
 		crc_0 := common.Crc16(barr[sentiel:iEnd])
 		iStart = iEnd
 		iEnd = iStart + common.INT16_LEN
 		crc_1 := binary.LittleEndian.Uint16(barr[iStart:iEnd])
 		if crc_0 != crc_1 {
-			log.Fatalf("the crc is failed")
+			logger.Error("the BtreeNodeItems crc is failed")
 		}
+		items[i] = b
 		sentiel = int(iEnd)
 	}
-	return &items
+	return items
 }
 
-func BatchBtreeNodeItemToBytes(items *[]*BtreeNodeItem, size uint16) []byte {
-	bytes := make([]byte, size, size)
-	iStart, iEnd := int32(0), int32(0)
-	for _, item := range *items {
-		length := item.Size()
-		iStart = iEnd
-		iEnd = iStart + length
-		arr := bytes[iStart:iEnd]
-		item.ToBytes(&arr)
-		copy(bytes[iStart:iEnd], arr)
+func BatchBtreeNodeItemToBytes(items []*BtreeNodeItem) []byte {
+	bytes := make([]byte,PAGESIZE, PAGESIZE)
+	iStart, length := int32(0), int32(0)
+	for _, item := range items {
+		iStart = iStart + length
+		length = item.ToBytes(bytes[iStart:])
 	}
-	return bytes
+	return bytes[0:iStart + length]
 }

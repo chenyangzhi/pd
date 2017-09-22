@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"bytes"
 )
 
 type Item interface {
@@ -70,10 +71,10 @@ func NewWithFreeList(degree int, f *FreeList, path string) *BTree {
 	fs, err := os.OpenFile(path, os.O_RDWR, 0666)
 	cow.f = fs
 	common.Check(err)
-	cow.mmapmap = make(map[uint32]*mmap.MMap)
+	cow.mmapmap = make(map[uint32]mmap.MMap)
 	cow.nodeIdMap = make(map[uint32]*node)
 	cow.dirtyPage = make(common.Set)
-	cow.mtPage = GetMetaPage(fs)
+	cow.mtPage,cow.metaMmap = GetMetaPage(fs)
 	cow.emptyList = cow.mtPage.GetEmptyList()
 	cow.freelist = f
 	return &BTree{
@@ -224,7 +225,7 @@ func (n *node) split(i int) (Item, *node) {
 // maybeSplitChild checks if a child should be split, and if so splits it.
 // Returns whether or not a split occurred.
 func (n *node) maybeSplitChild(i, maxItems int) bool {
-	if len(n.children[i].childNode.items) < maxItems {
+	if len(n.getReadableChild(i).items) < maxItems {
 		return false
 	}
 	first := n.getReadableChild(i)
@@ -274,7 +275,7 @@ func (n *node) get(key Item) Item {
 	if found {
 		return n.items[i]
 	} else if len(n.children) > 0 {
-		return n.children[i].childNode.get(key)
+		return n.getReadableChild(i).get(key)
 	}
 	return nil
 }
@@ -546,9 +547,10 @@ type copyOnWriteContext struct {
 	freelist  *FreeList
 	f         *os.File
 	emptyList []uint32
-	mmapmap   map[uint32]*mmap.MMap
+	mmapmap   map[uint32]mmap.MMap
 	nodeIdMap map[uint32]*node
 	mtPage    *MetaPage
+	metaMmap  mmap.MMap
 	dirtyPage common.Set
 }
 
@@ -590,9 +592,9 @@ func (t *BTree) minItems() int {
 func (c *copyOnWriteContext) newNode() (n *node) {
 	n = c.freelist.newNode()
 	n.cow = c
-	n.nodeId = c.emptyList[0]
+	n.nodeId = c.emptyList[len(c.emptyList)-1]
 	_assert(len(c.emptyList) != 0, "the emptylist length is zero")
-	c.emptyList = c.emptyList[1:len(c.emptyList)]
+	c.emptyList = c.emptyList[0:len(c.emptyList)-1]
 	c.nodeIdMap[n.nodeId] = n
 	return
 }
@@ -787,8 +789,8 @@ type Int int
 func (a Int) Less(b Item) bool {
 	return a < b.(Int)
 }
-func (a BtreeNodeItem) Less(b Item) bool {
-	return a.Key < (b.(BtreeNodeItem)).Key
+func (a *BtreeNodeItem) Less(b Item) bool {
+	return bytes.Compare(a.Key , (b.(*BtreeNodeItem)).Key) == -1
 }
 
 func (tr BTree) GetDirtyPage() *common.Set {
@@ -806,6 +808,16 @@ func (tr BTree) GetNodeIds() []uint32 {
 	}
 	return arr
 }
-func (tr BTree) commit() {
-
+func (tr BTree) Commit() {
+	d := tr.cow.dirtyPage
+	tr.cow.mtPage.RootId = tr.root.nodeId
+	tr.cow.mtPage.EmptyPageCount = uint32(len(tr.cow.emptyList))
+	tr.cow.mtPage.SetEmptyPage(tr.cow.emptyList)
+	copy(tr.cow.metaMmap,tr.cow.mtPage.ToBytes())
+	for k,_ := range d{
+		node := tr.cow.nodeIdMap[k]
+		page := node.NodeToPage()
+		page.WriteToMMapRegion(tr.cow)
+	}
+	tr.cow.dirtyPage = make(common.Set)
 }

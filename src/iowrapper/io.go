@@ -5,7 +5,18 @@ import (
 	"os"
 )
 
+func PathExist(_path string) bool {
+	_, err := os.Stat(_path)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
 func CreateSparseFile(pathFile string, fileSize int64) error {
+	if PathExist(pathFile) {
+		return nil
+	}
 	f, err := os.Create(pathFile)
 	if err != nil {
 		log.Fatal(err)

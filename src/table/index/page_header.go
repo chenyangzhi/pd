@@ -36,9 +36,9 @@ func NewBtreeNodePageHeader(f, n uint32, i, c uint16, ci []uint32) *BtreeNodePag
 	}
 }
 
-func (item BtreeNodePageHeaderData) ToBytes() *[]byte {
+func (item BtreeNodePageHeaderData) ToBytes() []byte {
 	iStart, iEnd := 0, 0
-	bs := make([]byte, 0, item.Size())
+	bs := make([]byte, item.Size()+common.INT16_LEN, item.Size()+common.INT16_LEN)
 	iEnd = iStart + common.INT32_LEN
 	binary.LittleEndian.PutUint32(bs[iStart:iEnd], uint32(item.PageSize))
 	iStart = iEnd
@@ -50,11 +50,22 @@ func (item BtreeNodePageHeaderData) ToBytes() *[]byte {
 	iStart = iEnd
 	iEnd = iStart + common.INT32_LEN
 	binary.LittleEndian.PutUint32(bs[iStart:iEnd], uint32(item.BtreeNodeId))
-	crc := common.Crc16(bs)
+	iStart = iEnd
+	iEnd = iStart + common.INT16_LEN
+	binary.LittleEndian.PutUint16(bs[iStart:iEnd], uint16(item.ItemsLength))
+	iStart = iEnd
+	iEnd = iStart + common.INT16_LEN
+	binary.LittleEndian.PutUint16(bs[iStart:iEnd], uint16(item.ChildrenLength))
+	for _,v := range item.ChildrenId{
+		iStart = iEnd
+		iEnd = iStart + common.INT32_LEN
+		binary.LittleEndian.PutUint32(bs[iStart:iEnd], v)
+	}
+	crc := common.Crc16(bs[0:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
 	binary.LittleEndian.PutUint16(bs[iStart:iEnd], crc)
-	return &bs
+	return bs
 }
 
 func BytesToBtreeNodePageHeader(barr []byte) (*BtreeNodePageHeaderData, uint32) {
@@ -88,7 +99,7 @@ func BytesToBtreeNodePageHeader(barr []byte) (*BtreeNodePageHeaderData, uint32) 
 	iEnd = iStart + common.INT16_LEN
 	crc_1 := binary.LittleEndian.Uint16(barr[iStart:iEnd])
 	if crc_0 != crc_1 {
-		logger.Error("the crc is failed")
+		logger.Error("the BtreeNodePageHeader crc is failed")
 	}
-	return item, item.ItemPointer
+	return item, uint32(iEnd)
 }
