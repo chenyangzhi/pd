@@ -508,7 +508,7 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 
 // Used for testing/debugging purposes.
 func (n *node) Print(w io.Writer, level int) {
-	fmt.Fprintf(w, "%sNODE:%v\n", strings.Repeat("  ", level), n.items)
+	fmt.Fprintf(w, "%sNODE:%s %d %s %d %v\n", strings.Repeat("  ", level), "nodeid:", n.nodeId, "the item length : ", len(n.items), n.items)
 	for _, c := range n.children {
 		c.childNode.Print(w, level+1)
 	}
@@ -797,4 +797,15 @@ func (tr BTree) GetDirtyPage() *common.Set {
 
 func (tr BTree) GetRootNode() *node {
 	return tr.root
+}
+
+func (tr BTree) GetNodeIds() []uint32 {
+	arr := make([]uint32, 0, 32)
+	for k := range tr.cow.nodeIdMap {
+		arr = append(arr, k)
+	}
+	return arr
+}
+func (tr BTree) commit() {
+
 }

@@ -13,6 +13,7 @@ const (
 	MMAPSIZE          = 1000
 	METAPAGEMAXLENGTH = 64 * 4096
 	MAXPAGENUMBER     = 64*4096*8 - 4096
+	INITROOTNULL      = MAXPAGENUMBER + 1
 	DEGREE            = 110
 )
 
@@ -105,6 +106,9 @@ func (n node) NodeToPage() *BtreeNodePage {
 func BuildBTreeFromPage(baseTableColumn string) *BTree {
 	tr := New(DEGREE, baseTableColumn)
 	rootId := tr.cow.mtPage.RootId
+	if rootId == INITROOTNULL {
+		return tr
+	}
 	mmapId := GetMmapId(rootId)
 	m := GetMMapRegion(mmapId, tr.cow.f)
 	tr.cow.mmapmap[mmapId] = m
