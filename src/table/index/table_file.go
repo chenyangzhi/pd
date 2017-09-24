@@ -34,7 +34,7 @@ func (table Table) CreateTable() {
 	if iowrapper.PathExist(path) {
 		return
 	}
-	common.Check(iowrapper.CreateSparseFile(path, 4096*10000))
+	common.Check(iowrapper.CreateSparseFile(path, 4096*1000000))
 	f, err := os.OpenFile(path, os.O_RDWR, 0666)
 	common.Check(err)
 	metaPage := NewMetaPage(INITROOTNULL, MAXPAGENUMBER/8)

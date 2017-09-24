@@ -8,13 +8,16 @@ import (
 )
 
 const (
-	PAGESIZE          = 4096*2
-	MMAPSIZE          = 1000
-	METAPAGEMAXLENGTH = 64 * 4096
+	PAGESIZE          = 4096
+	MMAPSIZE          = 200
+	METAPAGEMAXLENGTH = 64 * PAGESIZE
 	MAXPAGENUMBER     = 64*4096*8 - 4096
 	INITROOTNULL      = MAXPAGENUMBER + 1
-	DEGREE            = 150
+	DEGREE            = 180
 	MAGIC             = 0x0dd6cfbb
+	CRCSIZE           = 2
+	MAXKEYSIZE        = 128
+	BLOCKSIZE         = 4096 * 2
 )
 
 func _assert(condition bool, msg string, v ...interface{}) {
@@ -37,7 +40,7 @@ func NewBreeNodePage(p *BtreeNodePageHeaderData, i []*BtreeNodeItem) *BtreeNodeP
 
 func (btreeNodePage BtreeNodePage) ToBytes() []byte {
 	iStart, iEnd := int32(0), int32(0)
-	bs := make([]byte, PAGESIZE, PAGESIZE)
+	bs := make([]byte, BLOCKSIZE, BLOCKSIZE)
 	bp := btreeNodePage.PageHeader.ToBytes()
 	iEnd = iStart + int32(len(bp))
 	copy(bs[iStart:iEnd], bp)
@@ -60,29 +63,29 @@ func GetMmapId(nodeId uint32) uint32 {
 	return nodeId / MMAPSIZE
 }
 
-func GetMmapOffset(nodeId uint32)uint32{
-	return nodeId%MMAPSIZE * PAGESIZE
+func GetMmapOffset(nodeId uint32) uint32 {
+	return nodeId % MMAPSIZE * BLOCKSIZE
 }
 func GetMMapRegion(numberMmap uint32, c *copyOnWriteContext) mmap.MMap {
 	if val, ok := c.mmapmap[numberMmap]; ok {
 		return val
 	}
-	off := int64(numberMmap*MMAPSIZE*PAGESIZE + METAPAGEMAXLENGTH)
-	mmp, err := mmap.MapRegion(c.f, PAGESIZE*MMAPSIZE, mmap.RDWR, 0, off)
+	off := int64(numberMmap*MMAPSIZE*BLOCKSIZE + METAPAGEMAXLENGTH)
+	mmp, err := mmap.MapRegion(c.f, BLOCKSIZE*MMAPSIZE, mmap.RDWR, 0, off)
 	common.Check(err)
 	c.mmapmap[numberMmap] = mmp
 	return mmp
 }
 
-func (bp BtreeNodePage) WriteToMMapRegion(cow *copyOnWriteContext){
+func (bp BtreeNodePage) WriteToMMapRegion(cow *copyOnWriteContext) {
 	mId := GetMmapId(bp.PageHeader.BtreeNodeId)
 	m := cow.mmapmap[mId]
 	if m == nil {
-		m = GetMMapRegion(mId,cow)
+		m = GetMMapRegion(mId, cow)
 	}
 	iStart := GetMmapOffset(bp.PageHeader.BtreeNodeId)
-	iEnd := iStart + PAGESIZE
-	copy(m[iStart:iEnd],bp.ToBytes())
+	iEnd := iStart + BLOCKSIZE
+	copy(m[iStart:iEnd], bp.ToBytes())
 	return
 }
 
@@ -132,7 +135,7 @@ func BuildBTreeFromPage(baseTableColumn string) *BTree {
 	m := GetMMapRegion(mmapId, tr.cow)
 	tr.cow.mmapmap[mmapId] = m
 	offset := GetMmapOffset(rootId)
-	p := BytesToBtreeNodePage(m[offset:offset+PAGESIZE])
+	p := BytesToBtreeNodePage(m[offset : offset+BLOCKSIZE])
 	tr.root = PageToNode(p, tr.cow)
 	return tr
 }
@@ -140,8 +143,8 @@ func BuildBTreeFromPage(baseTableColumn string) *BTree {
 func GetBTreeNodeById(id uint32, cow *copyOnWriteContext) *node {
 	mmapId := GetMmapId(id)
 	mmap := GetMMapRegion(mmapId, cow)
-	iStart := id % MMAPSIZE * PAGESIZE
-	iEnd := iStart + PAGESIZE
+	iStart := id % MMAPSIZE * BLOCKSIZE
+	iEnd := iStart + BLOCKSIZE
 	pageNode := BytesToBtreeNodePage(mmap[iStart:iEnd])
 	return PageToNode(pageNode, cow)
 }

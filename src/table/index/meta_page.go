@@ -5,11 +5,10 @@ import (
 	"encoding/binary"
 	"github.com/edsrzf/mmap-go"
 	"os"
-	logger "until/xlog4go"
 )
 
 type MetaPage struct {
-        Magic          uint32
+	Magic          uint32
 	RootId         uint32
 	EmptyPageCount uint32
 	EmptyPage      []byte
@@ -25,7 +24,7 @@ func NewMetaPage(rootId uint32, emptyCount uint32) *MetaPage {
 }
 
 func (metaPage MetaPage) Size() int32 {
-	return PAGESIZE * 64
+	return METAPAGEMAXLENGTH
 }
 
 func (metaPage MetaPage) ToBytes() []byte {
@@ -42,6 +41,7 @@ func (metaPage MetaPage) ToBytes() []byte {
 	binary.LittleEndian.PutUint32(bs[iStart:iEnd], uint32(metaPage.EmptyPageCount))
 	iStart = iEnd
 	iEnd = iStart + len(metaPage.EmptyPage)
+	_assert(metaPage.EmptyPage != nil, "the meta empty page is nil")
 	copy(bs[iStart:iEnd], metaPage.EmptyPage)
 	crc := common.Crc16(bs[0:iEnd])
 	iStart = iEnd
@@ -69,9 +69,7 @@ func BytesToMetaPage(barr []byte) *MetaPage {
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
 	crc_1 := binary.LittleEndian.Uint16(barr[iStart:iEnd])
-	if crc_0 != crc_1 {
-		logger.Error("the MetaPage crc is failed")
-	}
+	_assert(crc_0 == crc_1, "the MetaPage crc is failed")
 	return item
 }
 
@@ -87,26 +85,28 @@ func (m MetaPage) GetEmptyList() []uint32 {
 
 	}
 	length := len(e)
-	f := make([]uint32,length,length)
-	for i,v := range e{
-		f[length - i - 1] = v
+	f := make([]uint32, length, length)
+	for i, v := range e {
+		f[length-i-1] = v
 	}
 	return f
 }
-func(m MetaPage) SetEmptyPage(l []uint32){
-	for i,_ := range m.EmptyPage{
-		m.EmptyPage[i] = 0xff
+func (m MetaPage) SetEmptyPage(l common.Set) {
+	for k := range l {
+		idx := k / 8
+		t := byte(1 << (k % 8))
+		s := m.EmptyPage[idx]
+		m.EmptyPage[idx] = t | s
 	}
-	for _,v := range l {
-		idx := v/8
-		m.EmptyPage[idx] = byte(0xff &^ (v%8)) & m.EmptyPage[idx]
-	}
+	return
 }
 
-func GetMetaPage(f *os.File) (*MetaPage,mmap.MMap) {
+func GetMetaPage(f *os.File) (*MetaPage, mmap.MMap) {
 	mmp, err := mmap.MapRegion(f, METAPAGEMAXLENGTH, mmap.RDWR, 0, 0)
 	bs := make([]byte, len(mmp), len(mmp))
 	copy(bs, mmp)
 	common.Check(err)
-	return BytesToMetaPage(bs),mmp
+	meta := BytesToMetaPage(bs)
+	_assert(meta.Magic == MAGIC, "the file is not database file")
+	return BytesToMetaPage(bs), mmp
 }

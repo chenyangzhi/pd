@@ -1,6 +1,7 @@
 package index
 
 import (
+	"bytes"
 	"common"
 	"fmt"
 	"github.com/edsrzf/mmap-go"
@@ -8,7 +9,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"bytes"
 )
 
 type Item interface {
@@ -74,8 +74,9 @@ func NewWithFreeList(degree int, f *FreeList, path string) *BTree {
 	cow.mmapmap = make(map[uint32]mmap.MMap)
 	cow.nodeIdMap = make(map[uint32]*node)
 	cow.dirtyPage = make(common.Set)
-	cow.mtPage,cow.metaMmap = GetMetaPage(fs)
+	cow.mtPage, cow.metaMmap = GetMetaPage(fs)
 	cow.emptyList = cow.mtPage.GetEmptyList()
+	cow.NewPage = make(common.Set)
 	cow.freelist = f
 	return &BTree{
 		degree: degree,
@@ -202,7 +203,8 @@ type node struct {
 
 func (n *node) getReadableChild(i int) *node {
 	if n.children[i].childNode == nil {
-		return GetBTreeNodeById(n.children[i].childNodeId, n.cow)
+		n.children[i].childNode = GetBTreeNodeById(n.children[i].childNodeId, n.cow)
+		return n.children[i].childNode
 	}
 	return n.children[i].childNode
 }
@@ -234,6 +236,7 @@ func (n *node) maybeSplitChild(i, maxItems int) bool {
 	n.children.insertAt(i+1, second)
 	n.cow.dirtyPage.Insert(n.nodeId)
 	n.cow.dirtyPage.Insert(first.nodeId)
+	n.cow.dirtyPage.Insert(second.nodeId)
 	return true
 }
 
@@ -260,7 +263,6 @@ func (n *node) insert(item Item, maxItems int) Item {
 		case inTree.Less(item):
 			i++ // we want second split node
 		default:
-			n.cow.dirtyPage.Insert(n.nodeId)
 			out := n.items[i]
 			n.items[i] = item
 			return out
@@ -510,11 +512,11 @@ func (n *node) iterate(dir direction, start, stop Item, includeStart bool, hit b
 // Used for testing/debugging purposes.
 func (n *node) Print(w io.Writer, level int) {
 	fmt.Fprintf(w, "%sNODE:%s %d %s %d ", strings.Repeat("  ", level), "nodeid:", n.nodeId, "the item length : ", len(n.items))
-	for _,o := range n.items{
-		fmt.Fprintf(w,"{%d}",o.(*BtreeNodeItem).IdxId)
+	for _, o := range n.items {
+		fmt.Fprintf(w, "{%d}", o.(*BtreeNodeItem).IdxId)
 	}
-	fmt.Fprintf(w,"\n")
-	for i, _ := range n.children {
+	fmt.Fprintf(w, "\n")
+	for i := range n.children {
 		node := n.getReadableChild(i)
 		node.Print(w, level+1)
 	}
@@ -552,6 +554,7 @@ type copyOnWriteContext struct {
 	freelist  *FreeList
 	f         *os.File
 	emptyList []uint32
+	NewPage   common.Set
 	mmapmap   map[uint32]mmap.MMap
 	nodeIdMap map[uint32]*node
 	mtPage    *MetaPage
@@ -598,8 +601,9 @@ func (c *copyOnWriteContext) newNode() (n *node) {
 	n = c.freelist.newNode()
 	n.cow = c
 	n.nodeId = c.emptyList[len(c.emptyList)-1]
+	c.NewPage.Insert(n.nodeId)
 	_assert(len(c.emptyList) != 0, "the emptylist length is zero")
-	c.emptyList = c.emptyList[0:len(c.emptyList)-1]
+	c.emptyList = c.emptyList[0 : len(c.emptyList)-1]
 	c.nodeIdMap[n.nodeId] = n
 	return
 }
@@ -608,6 +612,7 @@ func (c *copyOnWriteContext) freeNode(n *node) {
 	if n.cow == c {
 		// clear to allow GC
 		c.emptyList = append(c.emptyList, n.nodeId)
+		delete(c.NewPage, n.nodeId)
 		n.items.truncate(0)
 		n.children.truncate(0)
 		n.cow = nil
@@ -795,7 +800,7 @@ func (a Int) Less(b Item) bool {
 	return a < b.(Int)
 }
 func (a *BtreeNodeItem) Less(b Item) bool {
-	return bytes.Compare(a.Key , (b.(*BtreeNodeItem)).Key) == -1
+	return bytes.Compare(a.Key, (b.(*BtreeNodeItem)).Key) == -1
 }
 
 func (tr BTree) GetDirtyPage() *common.Set {
@@ -817,9 +822,9 @@ func (tr BTree) Commit() {
 	d := tr.cow.dirtyPage
 	tr.cow.mtPage.RootId = tr.root.nodeId
 	tr.cow.mtPage.EmptyPageCount = uint32(len(tr.cow.emptyList))
-	tr.cow.mtPage.SetEmptyPage(tr.cow.emptyList)
-	copy(tr.cow.metaMmap,tr.cow.mtPage.ToBytes())
-	for k,_ := range d{
+	tr.cow.mtPage.SetEmptyPage(tr.cow.NewPage)
+	copy(tr.cow.metaMmap, tr.cow.mtPage.ToBytes())
+	for k := range d {
 		node := tr.cow.nodeIdMap[k]
 		page := node.NodeToPage()
 		page.WriteToMMapRegion(tr.cow)

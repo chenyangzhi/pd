@@ -5,6 +5,8 @@ import (
 	"container/list"
 )
 
+type InsertMemTable [][]*column.Recode
+type UpdateMemTable SkipList
 type Memtable struct {
 	MumEntries     int32
 	MutableTable   [][]*column.Recode
