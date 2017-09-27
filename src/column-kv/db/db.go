@@ -7,6 +7,7 @@ import (
 type Db struct {
 	DbName string
 	Mem    *mem.Memtable
+	Table  []*Region
 }
 
 func NewDb() *Db {

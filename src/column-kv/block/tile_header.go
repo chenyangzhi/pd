@@ -7,9 +7,10 @@ import (
 	"until"
 )
 
-type PageHeader struct {
-	PageVersion uint16
-	PageSize    uint32
+type TileHeader struct {
+	TileVersion uint16
+	TileSize    uint32
+	PageNum     uint32
 	IndexMin    uint64
 	IndexMax    uint64
 	ValueLength uint16
@@ -17,17 +18,20 @@ type PageHeader struct {
 	ColumnCount uint16
 }
 
-func (ph PageHeader) Size() uint16 {
+func (ph TileHeader) Size() uint16 {
 	return uint16(unsafe.Sizeof(ph))
 }
 
-func (ph PageHeader) ToBytes(bs []byte) uint32 {
+func (ph TileHeader) ToBytes(bs []byte) uint32 {
 	iStart, iEnd := int32(0), int32(0)
 	iEnd = iStart + common.INT16_LEN
-	binary.LittleEndian.PutUint16(bs[iStart:iEnd], ph.PageVersion)
+	binary.LittleEndian.PutUint16(bs[iStart:iEnd], ph.TileVersion)
 	iStart = iEnd
 	iEnd = iStart + common.INT32_LEN
-	binary.LittleEndian.PutUint32(bs[iStart:iEnd], ph.PageSize)
+	binary.LittleEndian.PutUint32(bs[iStart:iEnd], ph.TileSize)
+	iStart = iEnd
+	iEnd = iStart + common.INT32_LEN
+	binary.LittleEndian.PutUint32(bs[iStart:iEnd], ph.PageNum)
 	iStart = iEnd
 	iEnd = iStart + common.INT64_LEN
 	binary.LittleEndian.PutUint64(bs[iStart:iEnd], ph.IndexMin)
@@ -49,14 +53,17 @@ func (ph PageHeader) ToBytes(bs []byte) uint32 {
 	binary.LittleEndian.PutUint16(bs[iStart:iEnd], crc)
 	return iEnd
 }
-func BytesToPageHeader(barr []byte) *PageHeader {
+func BytesToTileHeader(barr []byte) *TileHeader {
 	iStart, iEnd := 0, 0
-	item := new(PageHeader)
+	item := new(TileHeader)
 	iEnd = iStart + common.INT16_LEN
-	item.PageVersion = binary.LittleEndian.Uint16(barr[iStart:iEnd])
+	item.TileVersion = binary.LittleEndian.Uint16(barr[iStart:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT32_LEN
-	item.PageSize = binary.LittleEndian.Uint32(barr[iStart:iEnd])
+	item.TileSize = binary.LittleEndian.Uint32(barr[iStart:iEnd])
+	iStart = iEnd
+	iEnd = iStart + common.INT32_LEN
+	item.PageNum = binary.LittleEndian.Uint32(barr[iStart:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT64_LEN
 	item.IndexMin = binary.LittleEndian.Uint64(barr[iStart:iEnd])
@@ -74,11 +81,11 @@ func BytesToPageHeader(barr []byte) *PageHeader {
 	item.ColumnCount = binary.LittleEndian.Uint16(barr[iStart:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
-	item.PageSize = binary.LittleEndian.Uint16(barr[iStart:iEnd])
+	item.TileSize = binary.LittleEndian.Uint16(barr[iStart:iEnd])
 	crc_0 := common.Crc16(barr[0:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
 	crc_1 := binary.LittleEndian.Uint16(barr[iStart:iEnd])
-	until.Assert(crc_0 == crc_1, "the PageHeader crc is failed")
+	until.Assert(crc_0 == crc_1, "the TileHeader crc is failed")
 	return item
 }

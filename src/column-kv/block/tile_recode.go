@@ -7,7 +7,7 @@ import (
 	"until"
 )
 
-type PageRecode struct {
+type TileRecode struct {
 	IdxId       uint64
 	KeyType     byte
 	Version     uint64
@@ -15,15 +15,15 @@ type PageRecode struct {
 	Value       []byte
 }
 
-func (pr PageRecode) Size() uint16 {
+func (pr TileRecode) Size() uint16 {
 	return uint16(unsafe.Sizeof(pr))
 }
 
-func (pr PageRecode) SizeWithoutValue() uint16 {
+func (pr TileRecode) SizeWithoutValue() uint16 {
 	return uint16(unsafe.Offsetof(pr.Value))
 }
 
-func (pr PageRecode) ToBytes(bs []byte) uint32 {
+func (pr TileRecode) ToBytes(bs []byte) uint32 {
 	iStart, iEnd := uint32(0), uint32(0)
 	iEnd = iStart + common.INT64_LEN
 	binary.LittleEndian.PutUint64(bs[iStart:iEnd], pr.IdxId)
@@ -46,9 +46,9 @@ func (pr PageRecode) ToBytes(bs []byte) uint32 {
 	return iEnd
 }
 
-func BytesToPageRecode(barr []byte) *PageRecode {
+func BytesToTileRecode(barr []byte) *TileRecode {
 	iStart, iEnd := 0, 0
-	item := new(PageRecode)
+	item := new(TileRecode)
 	iEnd = iStart + common.INT64_LEN
 	item.IdxId = binary.LittleEndian.Uint64(barr[iStart:iEnd])
 	iStart = iEnd
@@ -68,6 +68,6 @@ func BytesToPageRecode(barr []byte) *PageRecode {
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
 	crc_1 := binary.LittleEndian.Uint16(barr[iStart:iEnd])
-	until.Assert(crc_0 == crc_1, "the PageRecode crc is failed")
+	until.Assert(crc_0 == crc_1, "the TileRecode crc is failed")
 	return item
 }
