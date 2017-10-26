@@ -1,17 +1,20 @@
 package column
 
 type Recode struct {
-	Key       int64
-	ValueLen  int16
+	Key       uint64
+	ValueLen  uint16
+	ValueSchemaSz uint16
 	Value     *[]byte
-	Timestamp int64
+	ColumnID  uint16
+	Timestamp uint64
 }
 
-func NewRecode(key int64, valueLen int16, value *[]byte) *Recode {
+func NewRecode(key uint64, valueLen uint16, value *[]byte,columnId uint16) *Recode {
 	return &Recode{
 		Key:      key,
 		ValueLen: valueLen,
 		Value:    value,
+		ColumnID: columnId,
 	}
 }
 

@@ -6,22 +6,26 @@ import (
 
 type Db struct {
 	DbName string
-	Mem    *mem.Memtable
+	Tables map[string]*Table
+}
+type Table struct {
+	TableName string
+	RegionNum    uint16
 	Table  []*Region
 }
 
 func NewDb() *Db {
 	return &Db{
-		Mem: mem.NewMemtable(),
 	}
 }
-func (db *Db) Insert(key int64, columns []*[]byte) bool {
-	flag := db.Mem.Add(key, columns)
-	return flag
-}
-func (db *Db) Update(key int64, columns []*[]byte) bool {
-	return db.Mem.Update(key, columns)
-}
-func (db *Db) Get(key int64) []*[]byte {
-	return db.Mem.Get(key)
+func NewTable(TableName string,rNum uint16)*Table{
+	t := new(Table)
+	t.TableName = TableName
+	t.RegionNum = rNum
+	table := make([]*Region,rNum,rNum)
+	for i := 0; i < rNum ; i++ {
+		region := NewRegion()
+		table[i] = region
+	}
+	return t
 }

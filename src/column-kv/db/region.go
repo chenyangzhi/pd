@@ -14,14 +14,34 @@ type Field struct {
 }
 type RegionContext struct {
 	mmap        map[uint32]mmap.MMap
-	IminsertTab map[uint32]mem.InsertMemTable
-	ImUpdateTab mem.UpdateMemTable
+	FilePath    string
 }
 type Region struct {
 	RShm  Schema
-	RRMin uint64
-	RRMax uint64
-	RItab mem.InsertMemTable
-	RUtab mem.UpdateMemTable
+	RegionId uint16
+	memTable mem.Memtable
 	Rcow  RegionContext
 }
+
+func NewRegion()*Region{
+	return new(Region)
+}
+
+func (region Region)Insert(key int64, value []*[]byte)bool{
+	return region.memTable.Add(key,value)
+}
+
+func (region Region)Update(key int64, value []*[]byte)bool{
+	return region.memTable.Update(key,value)
+}
+
+func (region Region)Get(key int64){
+	val := region.memTable.Get(key)
+	if val != nil {
+		return val
+	}else {
+		//to do: find the in the disk
+		return nil
+	}
+}
+

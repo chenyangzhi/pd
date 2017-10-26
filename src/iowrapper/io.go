@@ -3,6 +3,7 @@ package iowrapper
 import (
 	"log"
 	"os"
+	"io/ioutil"
 )
 
 func PathExist(_path string) bool {
@@ -39,4 +40,11 @@ func TruncateIndexFile(pathFile string, extendSize int64) error {
 
 func MmapIndexFile() {
 
+}
+
+func WriteFile(fileName string,b []byte) {
+	err := ioutil.WriteFile("output.txt", b, 0644)
+	if err != nil {
+		panic(err)
+	}
 }
