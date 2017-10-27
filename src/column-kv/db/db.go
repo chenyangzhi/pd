@@ -1,7 +1,7 @@
 package db
 
 import (
-	"column-kv/mem"
+//	"column-kv/mem"
 )
 
 type Db struct {
@@ -18,6 +18,7 @@ func NewDb() *Db {
 	return &Db{
 	}
 }
+/*
 func NewTable(TableName string,rNum uint16)*Table{
 	t := new(Table)
 	t.TableName = TableName
@@ -29,3 +30,4 @@ func NewTable(TableName string,rNum uint16)*Table{
 	}
 	return t
 }
+*/
