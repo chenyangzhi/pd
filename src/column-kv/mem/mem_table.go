@@ -78,9 +78,9 @@ func (mem *Memtable) GetInsertValue(key int64) (val []*[]byte) {
 	return nil
 }
 
-func InsertMemTableToBlockFile(mm InsertMemTable)*block.BlockFile{
-	mb :=
-	bf := block.NewBlockFile()
+func (memtable Memtable)InsertMemTableToBlockFile()*block.BlockFile{
+	bf := new(block.BlockFile)
+	tile := new(block.TileContent)
 	oneColumn := make([]*column.Recode,0,block.TileCodeNum)
 	count := 0
 	columnIndex := 0

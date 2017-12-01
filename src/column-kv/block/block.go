@@ -96,6 +96,13 @@ func (file BlockFile) ToBytes()[]byte{
 	return bs
 }
 
+func (bf BlockFile)ToBytes()[]byte{
+	iStart,iEnd :=
+	barr := make([]byte,0,32)
+	mb := bf.Mb.ToBytes()
+	return
+}
+
 func (mb MetaBlock) ToBytes()[]byte {
 	bs := make([]byte,METABLOCKSIZE,METABLOCKSIZE)
 	iStart, iEnd := uint32(0), uint32(0)
