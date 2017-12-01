@@ -79,8 +79,8 @@ func (mem *Memtable) GetInsertValue(key int64) (val []*[]byte) {
 }
 
 func InsertMemTableToBlockFile(mm InsertMemTable)*block.BlockFile{
-	bf := new(block.BlockFile)
-	tile := new(block.TileContent)
+	mb :=
+	bf := block.NewBlockFile()
 	oneColumn := make([]*column.Recode,0,block.TileCodeNum)
 	count := 0
 	columnIndex := 0
@@ -100,5 +100,5 @@ func InsertMemTableToBlockFile(mm InsertMemTable)*block.BlockFile{
 }
 // to flush
 func (mem Memtable)UnMutableFlush(){
-	mem.MnmutableTbale
+
 }

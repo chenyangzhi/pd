@@ -4,6 +4,7 @@ import (
 	"unsafe"
 	"encoding/binary"
 	"common"
+	"pkg/go/build/testdata/other/file"
 )
 
 type Block struct {
@@ -12,12 +13,29 @@ type Block struct {
 	ColumOffset []uint64
 	BlockTile   []*TileContent
 }
+
+func NewBlock(min,max uint64,off []uint64,btile []*TileContent)*Block{
+	b := new(Block)
+	b.IndexMax = max
+	b.IndexMin = min
+	b.BlockTile = btile
+	b.ColumOffset = off
+	return b
+}
+
 type BlockIndex struct {
 	IndixMin uint64
 	IndixMax uint64
 	Offset   uint32
 }
 
+func NewBlockIndex(max,min uint64,off uint32)*BlockFile{
+	bi := new(BlockIndex)
+	bi.IndixMax = max
+	bi.IndixMin = min
+	bi.Offset = off
+	return bi
+}
 func (bi BlockIndex) Size() uint32 {
 	return uint32(unsafe.Sizeof(bi))
 }
@@ -41,9 +59,41 @@ type MetaBlock struct {
 	BlockOff []BlockIndex
 }
 
+func NewMetaBlock(length uint32)*MetaBlock{
+	mb := new(MetaBlock)
+	mb.Magic = MAGIC
+	mb.MBlockLen = length
+	return mb
+}
+
 type BlockFile struct {
-	Mb MetaBlock
+	Mb *MetaBlock
 	Blocks []*Block
+	Size    uint32
+}
+
+func NewBlockFile(mb *MetaBlock,blocks []*Block,mbSize,blocksSize uint32)*BlockFile{
+	b := new(BlockFile)
+	b.Mb = mb
+	b.Blocks = blocks
+	size := uint32(0)
+	size += mbSize
+	size += blocksSize
+	b.Size = size
+	return b
+}
+
+func (file BlockFile) ToBytes()[]byte{
+	iStart,iEnd := 0,0
+	bs := make([]byte,file.Size,file.Size)
+	mb := file.Mb.ToBytes()
+	iEnd = len(mb)
+	copy(bs[iStart:iEnd],mb)
+	iStart = iEnd
+	for _,v := range file.Blocks{
+		iStart = iStart + v.ToBytes(bs[iStart])
+	}
+	return bs
 }
 
 func (mb MetaBlock) ToBytes()[]byte {
@@ -63,7 +113,7 @@ func (mb MetaBlock) ToBytes()[]byte {
 	return bs
 }
 
-func (b Block) ToBytes(bs []byte) {
+func (b Block) ToBytes(bs []byte)uint32 {
 	iStart, iEnd := uint32(0), uint32(0)
 	iEnd = iStart + common.INT64_LEN
 	binary.LittleEndian.PutUint64(bs[iStart:iEnd], b.IndexMin)
@@ -78,4 +128,5 @@ func (b Block) ToBytes(bs []byte) {
 		lth := o.ToBytes(bs[iStart:])
 		iStart = iStart + lth
 	}
+	return iStart
 }
