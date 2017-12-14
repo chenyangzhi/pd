@@ -4,15 +4,18 @@ import (
 	"column-kv/column"
 	"container/list"
 	"column-kv/block"
+	"iowrapper"
 )
 
 type InsertMemTable [][]*column.Recode
 type UpdateMemTable SkipList
 type Memtable struct {
 	MumEntries     int32
+	MutableTabSize int32
 	MutableTable   InsertMemTable
 	UpdateTable    SkipList
 	MnmutableTbale *list.List
+	Bf             *block.BlockFile
 	Cur            int32
 }
 
@@ -78,25 +81,34 @@ func (mem *Memtable) GetInsertValue(key int64) (val []*[]byte) {
 	return nil
 }
 
-func (memtable Memtable)InsertMemTableToBlockFile()*block.BlockFile{
-	bf := new(block.BlockFile)
-	tile := new(block.TileContent)
+func (memtable InsertMemTable)UnMutableMemTableToBlockFile(bf *block.BlockFile)*block.BlockFile{
+	if bf == nil {
+		bf = new(block.BlockFile)
+	}
 	oneColumn := make([]*column.Recode,0,block.TileCodeNum)
 	count := 0
 	columnIndex := 0
 	columnNum := 1
+	blockth := 0
 	for columnIndex < columnNum {
-		for _, o := range mm {
+		for _, o := range memtable {
 			if count == block.TileCodeNum {
 				// to do  contruct the tile
+				tile := block.NewTileContent(oneColumn)
+				bf.Blocks[blockth].BlockTile[columnIndex].Th = tile
 				count = 0
 			} else {
 				oneColumn = append(oneColumn, o[columnIndex])
 				count++
 			}
 		}
+		columnIndex++
 	}
-	return nil
+	if blockth > block.MAXBLOCKFILENUM {
+		bs := bf.ToBytes()
+		iowrapper.WriteFile("",bs)
+	}
+	return bf
 }
 // to flush
 func (mem Memtable)UnMutableFlush(){

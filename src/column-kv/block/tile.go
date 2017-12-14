@@ -15,6 +15,8 @@ const (
 	CRCSIZE     = 2
 	TileCodeNum = 1024
 	METABLOCKSIZE = PAGESIZE * 2
+	MAXBLOCKFILENUM = 1024
+	MAXTILEPAGENUM = 16
 )
 
 type TileContent struct {
