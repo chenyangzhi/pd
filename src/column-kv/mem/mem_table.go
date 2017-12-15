@@ -6,6 +6,18 @@ import (
 	"column-kv/block"
 	"iowrapper"
 )
+const(
+	MAXMEMTABSIZE = 64 * 1024 * 1024
+	UNMUTABLENUM = 4
+)
+
+type BlockFileInfo struct{
+	MaxId    uint64
+	MinId    uint64
+	Useage   float32
+	FileName string
+	Bfilter   bloo
+}
 
 type InsertMemTable [][]*column.Recode
 type UpdateMemTable SkipList
@@ -14,8 +26,10 @@ type Memtable struct {
 	MutableTabSize int32
 	MutableTable   InsertMemTable
 	UpdateTable    SkipList
-	MnmutableTbale *list.List
+	MnmutableTbale *Queue
 	Bf             *block.BlockFile
+	BlockCache     *list.List
+	File           *BlockFileInfo
 	Cur            int32
 }
 
@@ -28,11 +42,18 @@ func NewMemtable() *Memtable {
 func (mem *Memtable) Add(key int64, value []*[]byte) bool {
 	rcs := make([]*column.Recode, 0, len(value))
 	for columnId, val := range value {
+		mem.MutableTabSize += len(*val)
 		rc := column.NewRecode(key, int16(len(*val)), val,columnId)
 		rcs = append(rcs, rc)
 	}
 	mem.Cur++
 	mem.MutableTable = append(mem.MutableTable, rcs)
+	if mem.MutableTabSize > MAXMEMTABSIZE {
+		mem.MnmutableTbale.Add(mem.MutableTable)
+		if mem.MnmutableTbale.Len() > UNMUTABLENUM {
+			go mem.UnMutableFlush()
+		}
+	}
 	return true
 }
 
@@ -112,5 +133,8 @@ func (memtable InsertMemTable)UnMutableMemTableToBlockFile(bf *block.BlockFile)*
 }
 // to flush
 func (mem Memtable)UnMutableFlush(){
-
+	l := mem.MnmutableTbale
+	for e := l.Next(); e != nil; {
+		mem.Bf = e.(InsertMemTable).UnMutableMemTableToBlockFile(mem.Bf)
+	}
 }
