@@ -1,9 +1,9 @@
 package mem
 
 import (
+	"column-kv/block"
 	"column-kv/column"
 	"container/list"
-	"column-kv/block"
 )
 
 type InsertMemTable [][]*column.Recode
@@ -25,7 +25,7 @@ func NewMemtable() *Memtable {
 func (mem *Memtable) Add(key int64, value []*[]byte) bool {
 	rcs := make([]*column.Recode, 0, len(value))
 	for columnId, val := range value {
-		rc := column.NewRecode(key, int16(len(*val)), val,columnId)
+		rc := column.NewRecode(key, int16(len(*val)), val, columnId)
 		rcs = append(rcs, rc)
 	}
 	mem.Cur++
@@ -36,7 +36,7 @@ func (mem *Memtable) Add(key int64, value []*[]byte) bool {
 func (mem *Memtable) Update(key int64, value []*[]byte) bool {
 	rcs := make([]*column.Recode, 0, len(value))
 	for columnId, val := range value {
-		rc := column.NewRecode(key, int16(len(*val)), val,columnId)
+		rc := column.NewRecode(key, int16(len(*val)), val, columnId)
 		rcs = append(rcs, rc)
 	}
 	mem.UpdateTable.Set(key, value)
@@ -78,10 +78,10 @@ func (mem *Memtable) GetInsertValue(key int64) (val []*[]byte) {
 	return nil
 }
 
-func (memtable Memtable)InsertMemTableToBlockFile()*block.BlockFile{
+func (memtable Memtable) InsertMemTableToBlockFile() *block.BlockFile {
 	bf := new(block.BlockFile)
 	tile := new(block.TileContent)
-	oneColumn := make([]*column.Recode,0,block.TileCodeNum)
+	oneColumn := make([]*column.Recode, 0, block.TileCodeNum)
 	count := 0
 	columnIndex := 0
 	columnNum := 1
@@ -98,7 +98,8 @@ func (memtable Memtable)InsertMemTableToBlockFile()*block.BlockFile{
 	}
 	return nil
 }
+
 // to flush
-func (mem Memtable)UnMutableFlush(){
+func (mem Memtable) UnMutableFlush() {
 	mem.MnmutableTbale
 }

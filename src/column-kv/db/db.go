@@ -10,14 +10,14 @@ type Db struct {
 }
 type Table struct {
 	TableName string
-	RegionNum    uint16
-	Table  []*Region
+	RegionNum uint16
+	Table     []*Region
 }
 
 func NewDb() *Db {
-	return &Db{
-	}
+	return &Db{}
 }
+
 /*
 func NewTable(TableName string,rNum uint16)*Table{
 	t := new(Table)

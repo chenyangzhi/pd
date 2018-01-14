@@ -2,9 +2,11 @@
 package main
 
 import (
+	"common"
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"github.com/xwb1989/sqlparser"
 	"log"
 	"math/rand"
 	"os"
@@ -12,8 +14,6 @@ import (
 	"table/index"
 	"time"
 	logger "until/xlog4go"
-	"github.com/xwb1989/sqlparser"
-	"common"
 )
 
 var (
@@ -44,10 +44,10 @@ func main() {
 		panic(err)
 	}
 	defer logger.Close()
-	sql:= "select a from tabke"
-	st ,err := sqlparser.Parse(sql)
+	sql := "select a from tabke"
+	st, err := sqlparser.Parse(sql)
 	common.Check(err)
-	fmt.Println("the sqlparser is %v",st)
+	fmt.Println("the sqlparser is %v", st)
 	go memery()
 	table := index.NewTable("/home/chenyangzhi/workplace/source/pd/data", "test", "test", "primaryKey")
 	table.CreateTable()

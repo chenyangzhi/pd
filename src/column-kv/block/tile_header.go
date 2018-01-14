@@ -18,13 +18,13 @@ type TileHeader struct {
 	ColumnCount uint16
 }
 
-func NewTileHeader(tileSize,pagenum uint32,min,max uint64,vlen,colId,colCount uint16)*TileHeader{
+func NewTileHeader(tileSize, pagenum uint32, min, max uint64, vlen, colId, colCount uint16) *TileHeader {
 	return &TileHeader{
 		TileVersion: 1,
-		TileSize: tileSize,
+		TileSize:    tileSize,
 		PageNum:     pagenum,
-		IndexMin: min,
-		IndexMax: max,
+		IndexMin:    min,
+		IndexMax:    max,
 		ValueLength: vlen,
 		ColumnId:    colId,
 		ColumnCount: colCount,

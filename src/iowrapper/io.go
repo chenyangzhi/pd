@@ -1,9 +1,9 @@
 package iowrapper
 
 import (
+	"io/ioutil"
 	"log"
 	"os"
-	"io/ioutil"
 )
 
 func PathExist(_path string) bool {
@@ -42,7 +42,7 @@ func MmapIndexFile() {
 
 }
 
-func WriteFile(fileName string,b []byte) {
+func WriteFile(fileName string, b []byte) {
 	err := ioutil.WriteFile("output.txt", b, 0644)
 	if err != nil {
 		panic(err)

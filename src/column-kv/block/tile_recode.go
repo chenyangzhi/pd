@@ -15,16 +15,15 @@ type TileRecode struct {
 	Value       []byte
 }
 
-func NewTileRecode(idxId, version uint64,keyType byte,vlen uint16,value []byte)*TileRecode {
+func NewTileRecode(idxId, version uint64, keyType byte, vlen uint16, value []byte) *TileRecode {
 	return &TileRecode{
-		IdxId:      idxId,
+		IdxId:       idxId,
 		KeyType:     keyType,
 		Version:     version,
 		ValueLength: vlen,
 		Value:       value,
 	}
 }
-
 
 func (pr TileRecode) Size() uint16 {
 	return uint16(unsafe.Sizeof(pr))
