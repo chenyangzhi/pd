@@ -24,6 +24,13 @@ const (
 	FLOAT64
 )
 
+func (s Schema) SchemaSize() uint32 {
+	size := uint(0)
+	for _, o := range s {
+		size += o.ValueLength
+	}
+	return size
+}
 func NewField(index uint16, name string, valueType uint8, vlen uint16) *Field {
 	f := new(Field)
 	f.Index = index

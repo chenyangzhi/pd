@@ -4,15 +4,33 @@ import (
 	"column-kv/block"
 	"column-kv/column"
 	"container/list"
+	"iowrapper"
 )
+
+const (
+	MAXMEMTABSIZE = 64 * 1024 * 1024
+	UNMUTABLENUM  = 4
+)
+
+type BlockFileInfo struct {
+	MaxId    uint64
+	MinId    uint64
+	Useage   float32
+	FileName string
+	Bfilter  bloo
+}
 
 type InsertMemTable [][]*column.Recode
 type UpdateMemTable SkipList
 type Memtable struct {
 	MumEntries     int32
+	MutableTabSize int32
 	MutableTable   InsertMemTable
 	UpdateTable    SkipList
-	MnmutableTbale *list.List
+	MnmutableTbale *Queue
+	Bf             *block.BlockFile
+	BlockCache     *list.List
+	File           *BlockFileInfo
 	Cur            int32
 }
 
@@ -25,11 +43,18 @@ func NewMemtable() *Memtable {
 func (mem *Memtable) Add(key int64, value []*[]byte) bool {
 	rcs := make([]*column.Recode, 0, len(value))
 	for columnId, val := range value {
+		mem.MutableTabSize += len(*val)
 		rc := column.NewRecode(key, int16(len(*val)), val, columnId)
 		rcs = append(rcs, rc)
 	}
 	mem.Cur++
 	mem.MutableTable = append(mem.MutableTable, rcs)
+	if mem.MutableTabSize > MAXMEMTABSIZE {
+		mem.MnmutableTbale.Add(mem.MutableTable)
+		if mem.MnmutableTbale.Len() > UNMUTABLENUM {
+			go mem.UnMutableFlush()
+		}
+	}
 	return true
 }
 
@@ -78,28 +103,40 @@ func (mem *Memtable) GetInsertValue(key int64) (val []*[]byte) {
 	return nil
 }
 
-func (memtable Memtable) InsertMemTableToBlockFile() *block.BlockFile {
-	bf := new(block.BlockFile)
-	tile := new(block.TileContent)
+func (memtable InsertMemTable) UnMutableMemTableToBlockFile(bf *block.BlockFile) *block.BlockFile {
+	if bf == nil {
+		bf = new(block.BlockFile)
+	}
 	oneColumn := make([]*column.Recode, 0, block.TileCodeNum)
 	count := 0
 	columnIndex := 0
 	columnNum := 1
+	blockth := 0
 	for columnIndex < columnNum {
-		for _, o := range mm {
+		for _, o := range memtable {
 			if count == block.TileCodeNum {
 				// to do  contruct the tile
+				tile := block.NewTileContent(oneColumn)
+				bf.Blocks[blockth].BlockTile[columnIndex].Th = tile
 				count = 0
 			} else {
 				oneColumn = append(oneColumn, o[columnIndex])
 				count++
 			}
 		}
+		columnIndex++
 	}
-	return nil
+	if blockth > block.MAXBLOCKFILENUM {
+		bs := bf.ToBytes()
+		iowrapper.WriteFile("", bs)
+	}
+	return bf
 }
 
 // to flush
 func (mem Memtable) UnMutableFlush() {
-	mem.MnmutableTbale
+	l := mem.MnmutableTbale
+	for e := l.Next(); e != nil; {
+		mem.Bf = e.(InsertMemTable).UnMutableMemTableToBlockFile(mem.Bf)
+	}
 }

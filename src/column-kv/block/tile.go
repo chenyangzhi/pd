@@ -6,15 +6,17 @@ import (
 )
 
 const (
-	PAGESIZE      = 4096
-	MINTILESIZE   = PAGESIZE * 4
-	COLUMNSIZE    = MINTILESIZE / 8
-	MAXTILESIZE   = COLUMNSIZE * 65536
-	COLUMNNUM     = 65536
-	MAGIC         = 0x0dd6cfbc
-	CRCSIZE       = 2
-	TileCodeNum   = 1024
-	METABLOCKSIZE = PAGESIZE * 2
+	PAGESIZE        = 4096
+	MINTILESIZE     = PAGESIZE * 4
+	COLUMNSIZE      = MINTILESIZE / 8
+	MAXTILESIZE     = COLUMNSIZE * 65536
+	COLUMNNUM       = 65536
+	MAGIC           = 0x0dd6cfbc
+	CRCSIZE         = 2
+	TileCodeNum     = 1024
+	METABLOCKSIZE   = PAGESIZE * 2
+	MAXBLOCKFILENUM = 1024
+	MAXTILEPAGENUM  = 16
 )
 
 type TileContent struct {
