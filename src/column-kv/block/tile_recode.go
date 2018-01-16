@@ -57,7 +57,7 @@ func (pr TileRecode) ToBytes(bs []byte) uint32 {
 }
 
 func BytesToTileRecode(barr []byte) *TileRecode {
-	iStart, iEnd := 0, 0
+	iStart, iEnd := uint32(0), uint32(0)
 	item := new(TileRecode)
 	iEnd = iStart + common.INT64_LEN
 	item.IdxId = binary.LittleEndian.Uint64(barr[iStart:iEnd])
@@ -71,7 +71,7 @@ func BytesToTileRecode(barr []byte) *TileRecode {
 	iEnd = iStart + common.INT16_LEN
 	item.ValueLength = binary.LittleEndian.Uint16(barr[iStart:iEnd])
 	iStart = iEnd
-	iEnd = iStart + item.ValueLength
+	iEnd = iStart + uint32(item.ValueLength)
 	bs := make([]byte, item.ValueLength, item.ValueLength)
 	copy(bs, barr[iStart:iEnd])
 	crc_0 := common.Crc16(barr[0:iEnd])

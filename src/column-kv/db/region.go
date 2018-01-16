@@ -25,9 +25,9 @@ const (
 )
 
 func (s Schema) SchemaSize() uint32 {
-	size := uint(0)
+	size := uint32(0)
 	for _, o := range s {
-		size += o.ValueLength
+		size += uint32(o.ValueLength)
 	}
 	return size
 }
@@ -56,7 +56,7 @@ type Region struct {
 	RShm     *Schema
 	RegionId uint16
 	memTable *mem.Memtable
-	Rcow     RegionContext
+	Rcow     *RegionContext
 }
 
 func NewRegion(rsche *Schema, rid uint16, filePath string) *Region {
@@ -68,15 +68,15 @@ func NewRegion(rsche *Schema, rid uint16, filePath string) *Region {
 	return new(Region)
 }
 
-func (region Region) Insert(key int64, value []*[]byte) bool {
+func (region Region) Insert(key uint64, value []*[]byte) bool {
 	return region.memTable.Add(key, value)
 }
 
-func (region Region) Update(key int64, value []*[]byte) bool {
+func (region Region) Update(key uint64, value []*[]byte) bool {
 	return region.memTable.Update(key, value)
 }
 
-func (region Region) Get(key int64) {
+func (region Region) Get(key uint64) []*[]byte {
 	val := region.memTable.Get(key)
 	if val != nil {
 		return val

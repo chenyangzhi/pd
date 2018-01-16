@@ -17,7 +17,6 @@ type BlockFileInfo struct {
 	MinId    uint64
 	Useage   float32
 	FileName string
-	Bfilter  bloo
 }
 
 type InsertMemTable [][]*column.Recode
@@ -40,11 +39,11 @@ func NewMemtable() *Memtable {
 	}
 }
 
-func (mem *Memtable) Add(key int64, value []*[]byte) bool {
+func (mem *Memtable) Add(key uint64, value []*[]byte) bool {
 	rcs := make([]*column.Recode, 0, len(value))
 	for columnId, val := range value {
-		mem.MutableTabSize += len(*val)
-		rc := column.NewRecode(key, int16(len(*val)), val, columnId)
+		mem.MutableTabSize += int32(len(*val))
+		rc := column.NewRecode(key, uint16(len(*val)), *val, uint16(columnId))
 		rcs = append(rcs, rc)
 	}
 	mem.Cur++
@@ -58,17 +57,17 @@ func (mem *Memtable) Add(key int64, value []*[]byte) bool {
 	return true
 }
 
-func (mem *Memtable) Update(key int64, value []*[]byte) bool {
+func (mem *Memtable) Update(key uint64, value []*[]byte) bool {
 	rcs := make([]*column.Recode, 0, len(value))
 	for columnId, val := range value {
-		rc := column.NewRecode(key, int16(len(*val)), val, columnId)
+		rc := column.NewRecode(key, uint16(len(*val)), *val, uint16(columnId))
 		rcs = append(rcs, rc)
 	}
 	mem.UpdateTable.Set(key, value)
 	return true
 }
 
-func (mem *Memtable) Get(key int64) (val []*[]byte) {
+func (mem *Memtable) Get(key uint64) (val []*[]byte) {
 	val, flag := mem.GetUpdateValue(key)
 	if flag != false {
 		return val
@@ -76,12 +75,12 @@ func (mem *Memtable) Get(key int64) (val []*[]byte) {
 	return mem.GetInsertValue(key)
 }
 
-func (mem *Memtable) GetUpdateValue(key int64) (val []*[]byte, flag bool) {
+func (mem *Memtable) GetUpdateValue(key uint64) (val []*[]byte, flag bool) {
 	//val, flag = mem.updateTable.Get(key)
 	return val, flag
 }
 
-func (mem *Memtable) GetInsertValue(key int64) (val []*[]byte) {
+func (mem *Memtable) GetInsertValue(key uint64) (val []*[]byte) {
 	i := int(mem.Cur / 2)
 	end := int(mem.Cur)
 	start := -1
@@ -89,7 +88,7 @@ func (mem *Memtable) GetInsertValue(key int64) (val []*[]byte) {
 		if mem.MutableTable[i][0].Key == key {
 			barr := make([]*[]byte, 0, len(mem.MutableTable[i]))
 			for _, val := range mem.MutableTable[i] {
-				barr = append(barr, val.Value)
+				barr = append(barr, &(val.Value))
 			}
 			return barr
 		} else if mem.MutableTable[i][0].Key < key {
@@ -116,8 +115,8 @@ func (memtable InsertMemTable) UnMutableMemTableToBlockFile(bf *block.BlockFile)
 		for _, o := range memtable {
 			if count == block.TileCodeNum {
 				// to do  contruct the tile
-				tile := block.NewTileContent(oneColumn)
-				bf.Blocks[blockth].BlockTile[columnIndex].Th = tile
+				//tile := block.NewTileContent(oneColumn)
+				//bf.Blocks[blockth].BlockTile[columnIndex].Th = tile
 				count = 0
 			} else {
 				oneColumn = append(oneColumn, o[columnIndex])

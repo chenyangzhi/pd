@@ -46,24 +46,24 @@ func (r *RPC) GetData(key int64, resp *[]*[]byte) (err error) {
 
 	//cacheValue, found := r.cache[key]
 
-	*resp = r.Db.Get(key)
+	//*resp = r.Db.Get(key)
 	r.Requests.Get++
 	fmt.Printf("this get finished %v\n", time.Since(start))
 	return nil
 }
 
 func (r *RPC) InsertData(re *Recode, resp *bool) (err error) {
-	key := re.Key
-	val := re.Value
-	*resp = r.Db.Insert(key, val)
+	//key := re.Key
+	//val := re.Value
+	//*resp = r.Db.Insert(key, val)
 	r.Requests.Insert++
 	return nil
 }
 
 func (r *RPC) Update(re *Recode, ack *bool) error {
-	key := re.Key
-	val := re.Value
-	*ack = r.Db.Update(key, val)
+	//key := re.Key
+	//val := re.Value
+	//*ack = r.Db.Update(key, val)
 	r.Requests.Update++
 	return nil
 }

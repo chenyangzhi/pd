@@ -12,7 +12,7 @@ func TablePrimaryIdForRegion(ridx uint16, tableName string) (turnIdx, limit uint
 	id = TabManager.Id[tableName][ridx]
 	limit = TabManager.Limit
 	turnIdx = TabManager.TurnIdx[tableName]
-	TabManager.Id[tableName][ridx] = id + limit
+	TabManager.Id[tableName][ridx] = id + uint64(limit)
 	TabManager.TurnIdx[tableName] = turnIdx + 1
 	return
 }

@@ -3,7 +3,6 @@ package block
 import (
 	"common"
 	"encoding/binary"
-	"pkg/go/build/testdata/other/file"
 	"unsafe"
 )
 
@@ -29,7 +28,7 @@ type BlockIndex struct {
 	Offset   uint32
 }
 
-func NewBlockIndex(max, min uint64, off uint32) *BlockFile {
+func NewBlockIndex(max, min uint64, off uint32) *BlockIndex {
 	bi := new(BlockIndex)
 	bi.IndixMax = max
 	bi.IndixMin = min
@@ -84,14 +83,14 @@ func NewBlockFile(mb *MetaBlock, blocks []*Block, mbSize, blocksSize uint32) *Bl
 }
 
 func (file BlockFile) ToBytes() []byte {
-	iStart, iEnd := 0, 0
+	iStart, iEnd := uint32(0), uint32(0)
 	bs := make([]byte, file.Size, file.Size)
 	mb := file.Mb.ToBytes()
-	iEnd = len(mb)
+	iEnd = uint32(len(mb))
 	copy(bs[iStart:iEnd], mb)
 	iStart = iEnd
 	for _, v := range file.Blocks {
-		iStart = iStart + v.ToBytes(bs[iStart])
+		iStart = iStart + v.ToBytes(bs[iStart:])
 	}
 	return bs
 }
@@ -103,7 +102,7 @@ func (mb MetaBlock) ToBytes() []byte {
 	binary.LittleEndian.PutUint32(bs[iStart:iEnd], mb.Magic)
 	iStart = iEnd
 	iEnd = iStart + common.INT32_LEN
-	mb.MBlockLen = len(mb.BlockOff) * mb.BlockOff[0].Size()
+	mb.MBlockLen = uint32(len(mb.BlockOff)) * mb.BlockOff[0].Size()
 	binary.LittleEndian.PutUint32(bs[iStart:iEnd], mb.MBlockLen)
 	iStart = iEnd
 	for _, o := range mb.BlockOff {
@@ -121,8 +120,8 @@ func (b Block) ToBytes(bs []byte) uint32 {
 	iEnd = iStart + common.INT64_LEN
 	binary.LittleEndian.PutUint64(bs[iStart:iEnd], b.IndexMax)
 	iStart = iEnd
-	iEnd = iStart + common.INT32_LEN
-	binary.LittleEndian.PutUint32(bs[iStart:iEnd], b.ColumOffset)
+	iEnd = iStart + common.INT64_LEN
+	binary.LittleEndian.PutUint64(bs[iStart:iEnd], b.ColumOffset[0])
 	for _, o := range b.BlockTile {
 		iStart = iEnd
 		lth := o.ToBytes(bs[iStart:])

@@ -30,9 +30,9 @@ func RecodeToTileRecode(idxId, version uint64, keyType byte, vlen uint16, value 
 
 func NewTileContent(param []*column.Recode) *TileContent {
 	colCount := len(param)
-	tileSize := 0
-	vlen := 0
-	colId := 0
+	tileSize := uint16(0)
+	vlen := uint16(0)
+	colId := uint16(0)
 	barr := make([]*TileRecode, 0, TileCodeNum)
 	min, max := 0, 0
 	for _, o := range param {
@@ -42,7 +42,7 @@ func NewTileContent(param []*column.Recode) *TileContent {
 		barr = append(barr, RecodeToTileRecode(o.Key, o.Timestamp, 1, o.ValueLen, o.Value))
 	}
 	pagenum := tileSize/PAGESIZE + 1
-	th := NewTileHeader(tileSize, pagenum, min, max, vlen, colId, colCount)
+	th := NewTileHeader(uint32(tileSize), uint32(pagenum), uint64(min), uint64(max), vlen, colId, uint16(colCount))
 	tct := new(TileContent)
 	tct.Th = th
 	tct.TRecodes = barr
@@ -50,11 +50,11 @@ func NewTileContent(param []*column.Recode) *TileContent {
 }
 
 func (pc TileContent) Size() uint32 {
-	return pc.Th.Size() + (pc.TRecodes[0].SizeWithoutValue()+pc.Th.ValueLength)*len(pc.TRecodes)
+	return uint32(pc.Th.Size() + (pc.TRecodes[0].SizeWithoutValue()+pc.Th.ValueLength)*uint16(len(pc.TRecodes)))
 }
 func (pc TileContent) ToBytes(bs []byte) uint32 {
-	sz := pc.Size() + (len(pc.TRecodes)+1)*common.INT16_LEN
-	iStart, iEnd := 0, 0
+	sz := pc.Size() + uint32((len(pc.TRecodes)+1))*uint32(common.INT16_LEN)
+	iStart, iEnd := uint16(0), uint16(0)
 	iEnd = iStart + pc.Th.Size() + common.INT16_LEN
 	pc.Th.ToBytes(bs[iStart:iEnd])
 	for _, o := range pc.TRecodes {

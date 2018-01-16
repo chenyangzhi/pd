@@ -36,7 +36,7 @@ func (ph TileHeader) Size() uint16 {
 }
 
 func (ph TileHeader) ToBytes(bs []byte) uint32 {
-	iStart, iEnd := int32(0), int32(0)
+	iStart, iEnd := uint32(0), uint32(0)
 	iEnd = iStart + common.INT16_LEN
 	binary.LittleEndian.PutUint16(bs[iStart:iEnd], ph.TileVersion)
 	iStart = iEnd
@@ -67,7 +67,7 @@ func (ph TileHeader) ToBytes(bs []byte) uint32 {
 	return iEnd
 }
 func BytesToTileHeader(barr []byte) *TileHeader {
-	iStart, iEnd := 0, 0
+	iStart, iEnd := uint32(0), uint32(0)
 	item := new(TileHeader)
 	iEnd = iStart + common.INT16_LEN
 	item.TileVersion = binary.LittleEndian.Uint16(barr[iStart:iEnd])
@@ -94,7 +94,7 @@ func BytesToTileHeader(barr []byte) *TileHeader {
 	item.ColumnCount = binary.LittleEndian.Uint16(barr[iStart:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
-	item.TileSize = binary.LittleEndian.Uint16(barr[iStart:iEnd])
+	item.TileSize = binary.LittleEndian.Uint32(barr[iStart:iEnd])
 	crc_0 := common.Crc16(barr[0:iEnd])
 	iStart = iEnd
 	iEnd = iStart + common.INT16_LEN
